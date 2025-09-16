@@ -1,0 +1,49 @@
+# Ambiente virtual
+.venv/
+venv/
+env/
+.env
+
+# Configurações do IDE
+.idea/
+.vscode/
+
+# Arquivos do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+/notebooks
+logs/
+*.log
+app.log
+error.log
+
+# Tests
+.pytest_cache
+
+# OS específicos
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Backup
+*.bak
+*.backup
+
+# Databases
+*.db
+*.sqlite3
+
+# credentials/
