@@ -10,12 +10,12 @@ from openai.types.audio import Transcription
 
 
 class OpenIAClient(IAI):
-    MAX_AUDIO_TRANSCRIBE_MB = int(os.getenv("OPENAI_MAX_AUDIO_TRANSCRIBE_MB"))
+    MAX_AUDIO_TRANSCRIBE_MB = int(os.getenv("OPENAI_MAX_AUDIO_TRANSCRIBE_MB", "25"))
 
     def __init__(self):
         self.assistant_id = os.getenv("OPENAI_ASSISTANT_ID")
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.max_output_tokens = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "998"))
+        self.max_output_tokens = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "1000"))
 
     def create_thread(self, messages: list | NotGiven = NOT_GIVEN) -> dict:
         try:

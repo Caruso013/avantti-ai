@@ -14,12 +14,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Expose port
-EXPOSE 5000
+EXPOSE 8000
 
 # Set environment variables for Flask
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONPATH=/app
 
-# Run the application using app.py directly
+# Run the application in production mode
 CMD ["python", "/app/app.py"]

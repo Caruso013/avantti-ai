@@ -11,9 +11,9 @@ class RedisClient(ICache):
 
     def __init__(self):
         self._redis = redis.Redis(
-            host=os.getenv("REDIS_HOST"),
-            port=int(os.getenv("REDIS_PORT")),
-            password=os.getenv("REDIS_PASSWORD"),
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            password=os.getenv("REDIS_PASSWORD", ""),
             decode_responses=True,
         )
 
