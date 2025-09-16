@@ -61,6 +61,16 @@ def message_receive() -> tuple:
 
 if __name__ == "__main__":
     import os
+    print("=== INICIANDO APLICAÇÃO ===")
+    print(f"PORT environment: {os.getenv('PORT', 'NOT_SET')}")
+    
     debug_mode = os.getenv("FLASK_ENV") == "development"
     port = int(os.getenv("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    
+    print(f"Starting Flask app on host=0.0.0.0, port={port}")
+    try:
+        app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    except Exception as e:
+        print(f"ERRO AO INICIAR FLASK: {e}")
+        import traceback
+        traceback.print_exc()
