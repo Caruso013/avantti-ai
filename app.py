@@ -22,6 +22,18 @@ def health_check():
     return jsonify({"status": "ok", "message": "Avantti AI API está funcionando!"})
 
 
+@app.route("/health", methods=["GET"])
+def health():
+    """Endpoint alternativo de health check"""
+    return jsonify({"status": "healthy", "service": "avantti-ai", "version": "1.0"})
+
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    """Endpoint simples de ping"""
+    return "pong"
+
+
 @app.route("/message_receive", methods=["POST"])
 def message_receive() -> tuple:
     if container is None:
