@@ -11,36 +11,42 @@ from utils.logger import logger, to_json_dump
 class CRMTool(ITool):
     name = "crm"
     model = "gpt-4o-mini"
-    _function_call_input = "Avise que em breve time de desenvolvimento entrará em contato para explicar como implementar e valores. Não diga olá, apenas responda como se a conversa estivesse continuando. Seja simpático e se deixe a disposição se houver alguma dúvida."
-    _seller_prompt = """Sua Função é escrever uma mensagem que deve ser envida via WhatsApp. Sua resposta deve conter apenas o conteúdo que será enviado direto para o whatsapp do usuário sem tratamento, apenas personalize as informações abaixo da mensagem modelo.
+    _function_call_input = "Perfeito! Registrei suas informações e nossa equipe comercial entrará em contato em breve para apresentar uma proposta personalizada. Enquanto isso, posso esclarecer alguma dúvida sobre nossas soluções de IA?"
+    _seller_prompt = """Sua função é escrever uma mensagem que será enviada via WhatsApp. Sua resposta deve conter apenas o conteúdo que será enviado direto para o WhatsApp do usuário, personalizando as informações abaixo da mensagem modelo.
+
 "
-Olá, [1º nome do cliente aqui]! Tudo bom?
+Olá, {first_name}! Tudo bem?
 
-Aqui é o Marcelo Baldi da b2bflow.
+Aqui é o Pedro da Avantti AI 👋
 
-Nossa IA me notificou sobre seu interesse em ter uma IA para [interesse do cliente aqui], e acredito que posso te ajudar.
+Nossa IA Sofia me notificou sobre seu interesse em {ai_solution}, e acredito que posso te ajudar a implementar uma solução personalizada.
 
-Qual seria o melhor horário para te ligar e entender melhor a ideia de vocês?
+Quando seria um bom momento para uma demo de 15 minutos? Posso te mostrar exatamente como nossa IA funcionaria na {company}.
 "
+
 Informações do cliente:
-
 Nome: {name}
-Motivo de buscar IA: {motivation}
+Empresa: {company}
+Necessidade: {motivation}
 
-Importante: Sempre escreva uma frase que tenha contexto e objetiva. Exemplo de uma boa mensagem:
+Importante: Sempre escreva uma mensagem natural e objetiva. Exemplo de uma boa mensagem:
+
 "
-Boa tarde Reginaldo! Tudo bom?
+Oi Carlos! Tudo bem?
 
-Aqui é o Marcelo Baldi da b2bflow.
+Aqui é o Pedro da Avantti AI 👋
 
-Nossa IA me notificou sobre seu interesse em ter uma IA para melhorar o tempo de resposta, e acredito que posso te ajudar.
+Nossa IA Sofia me notificou sobre seu interesse em chatbot para WhatsApp, e acredito que posso te ajudar a implementar uma solução personalizada.
 
-Qual seria o melhor horário para te ligar e entender melhor a ideia de vocês?
+Quando seria um bom momento para uma demo de 15 minutos? Posso te mostrar exatamente como nossa IA funcionaria na MegaStore.
 "
 
-Nunca copie e cole o interesse do cliente, adapte para ficar bom na mensagem.
-
-Só altere as variáveis, o resto da mensagem deve ser o mesmo do modelo."""
+Diretrizes:
+- Use apenas o primeiro nome
+- Adapte a necessidade para soar natural (não copie exatamente)
+- Mencione a empresa quando relevante
+- Sempre ofereça demo específica
+- Tom consultivo e profissional"""
 
     def __init__(
         self,
@@ -97,7 +103,7 @@ Só altere as variáveis, o resto da mensagem deve ser o mesmo do modelo."""
             }
 
     def _send_message_from_seller_to_customer(
-        self, phone: str, lead_name: str, motivation: str
+        self, phone: str, lead_name: str, motivation: str, company_name: str = ""
     ) -> None:
         response = self.ai.create_model_response(
             model=self.model,
@@ -106,7 +112,10 @@ Só altere as variáveis, o resto da mensagem deve ser o mesmo do modelo."""
                     "role": "user",
                     "content": self._seller_prompt.format(
                         name=lead_name,
+                        first_name=lead_name.split()[0] if lead_name else "Olá",
+                        company=company_name or "sua empresa",
                         motivation=motivation,
+                        ai_solution=motivation,
                     ),
                 }
             ],
@@ -210,7 +219,7 @@ Só altere as variáveis, o resto da mensagem deve ser o mesmo do modelo."""
         # Inicia thread para enviar mensagem do vendedor (mantida funcionalidade)
         Thread(
             target=self._send_message_from_seller_to_customer,
-            args=(phone, lead_name, motivation),
+            args=(phone, lead_name, motivation, company_name),
             daemon=False,
         ).start()
 
