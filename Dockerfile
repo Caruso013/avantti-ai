@@ -31,7 +31,7 @@ RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf || tru
     mkdir -p /var/log/nginx && \
     printf '%s\n' \
       'server {' \
-      '    listen 8080;' \
+      '    listen 5000;' \
       '    server_name _;' \
       '' \
       '    client_max_body_size 50m;' \
@@ -40,7 +40,7 @@ RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf || tru
       '    proxy_send_timeout 300;' \
       '' \
       '    location / {' \
-      '        proxy_pass http://127.0.0.1:5000;' \
+      '        proxy_pass http://127.0.0.1:5001;' \
       '        proxy_set_header Host $host;' \
       '        proxy_set_header X-Real-IP $remote_addr;' \
       '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
