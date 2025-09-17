@@ -1,16 +1,17 @@
-# NOVO DOCKERFILE - FORÇA REBUILD TOTAL v4
+# NOVO DOCKERFILE - COM REQUESTS
 FROM python:3.11-slim
 
 # Cache buster crítico
-ENV CACHE_BUSTER=v20250917_FINAL_FIX
+ENV CACHE_BUSTER=v20250917_REQUESTS_FIX
 
 WORKDIR /app
 
-# Copia requirements
-COPY requirements.simple.txt requirements.txt
+# Copia requirements primeiro
+COPY requirements.simple.txt .
 
-# Força reinstalação
-RUN pip install --no-cache-dir --force-reinstall flask
+# Instala dependências incluindo requests
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.simple.txt
 
 # Copia app
 COPY app.py .
