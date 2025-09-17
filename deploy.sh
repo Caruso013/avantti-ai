@@ -7,13 +7,12 @@ echo "🚀 Preparando deploy para EasyPanel..."
 git add .
 
 # Commit
-git commit -m "feat: preparar deploy para produção no EasyPanel
+git commit -m "feat: deploy limpo com arquivo único
 
-- Dockerfile.production otimizado com Gunicorn
-- app_production.py com logs de produção  
-- docker-compose.yml configurado
-- Documentação completa de deploy
-- Configurações de segurança implementadas"
+- Dockerfile único e otimizado
+- app.py limpo com todas as funcionalidades
+- requirements.txt simplificado
+- Sistema de filas e contexto funcionando"
 
 # Push
 git push origin main
@@ -21,7 +20,7 @@ git push origin main
 echo "✅ Deploy preparado! Agora configure no EasyPanel:"
 echo "1. Repository: $(git remote get-url origin)"
 echo "2. Branch: main" 
-echo "3. Dockerfile: Dockerfile.production"
+echo "3. Dockerfile: Dockerfile"
 echo "4. Port: 5000"
 echo ""
 echo "📖 Consulte DEPLOY_EASYPANEL.md para instruções detalhadas"
