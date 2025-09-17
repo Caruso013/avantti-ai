@@ -38,7 +38,7 @@ def process_message_queue(phone):
             print(f"[FILA] Processando: '{mensagem_texto}' de {phone}")
             
             # Salva mensagem do cliente
-            salvar_mensagem_supabase(phone, mensagem_texto, is_customer=True)
+            salvar_mensagem_supabase(phone, mensagem_texto, 'inbound')
             
             # Busca contexto da conversa
             contexto = buscar_contexto_conversa(phone)
@@ -47,7 +47,7 @@ def process_message_queue(phone):
             resposta_ia = gerar_resposta_openai(mensagem_texto, phone, contexto)
             
             # Salva resposta da IA
-            salvar_mensagem_supabase(phone, resposta_ia, is_customer=False)
+            salvar_mensagem_supabase(phone, resposta_ia, 'outbound')
             
             # Envia resposta via Z-API
             enviar_mensagem_zapi(phone, resposta_ia)
