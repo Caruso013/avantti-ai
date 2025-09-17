@@ -123,12 +123,14 @@ def message_receive() -> tuple:
     
     try:
         # Extrai dados da mensagem do Z-API
-        mensagem_texto = payload.get('body', {}).get('text', '')
-        numero_remetente = payload.get('from', '')
+        # Z-API estrutura: {'text': {'message': 'conteúdo'}, 'phone': 'numero'}
+        texto_obj = payload.get('text', {})
+        mensagem_texto = texto_obj.get('message', '') if isinstance(texto_obj, dict) else str(texto_obj)
+        numero_remetente = payload.get('phone', '')
         
         # Verifica se é uma mensagem válida
         if not mensagem_texto or not numero_remetente:
-            print("⚠️ Mensagem sem texto ou remetente")
+            print(f"⚠️ Mensagem inválida - Texto: '{mensagem_texto}' | Número: '{numero_remetente}'")
             return jsonify({"status": "ignored", "reason": "missing_data"}), 200
         
         # Ignora mensagens do próprio bot
