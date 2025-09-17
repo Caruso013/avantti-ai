@@ -1,4 +1,4 @@
-# Dockerfile ULTRA-SIMPLES para funcionar HOJE
+# Dockerfile SIMPLIFICADO para app.py principal
 FROM python:3.11-slim
 
 # Diretório de trabalho
@@ -10,8 +10,8 @@ COPY requirements.simple.txt .
 # Instala apenas Flask
 RUN pip install --no-cache-dir -r requirements.simple.txt
 
-# Copia apenas o arquivo necessário
-COPY app_minimal.py .
+# Copia apenas o arquivo principal
+COPY app.py .
 
 # Variáveis de ambiente
 ENV PYTHONUNBUFFERED=1
@@ -20,5 +20,5 @@ ENV FLASK_ENV=production
 # Expõe porta 5000
 EXPOSE 5000
 
-# Comando simples
-CMD ["python", "app_minimal.py"]
+# Comando principal
+CMD ["python", "app.py"]

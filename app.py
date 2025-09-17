@@ -1,29 +1,18 @@
-from dotenv import load_dotenv
 from flask import Flask, request, jsonify
-from utils.logger import logger, to_json_dump
-
-load_dotenv()
-from container.container import Container
+import os
 
 app = Flask(__name__)
 
-# Container simplificado - apenas para health check funcionar
-container = None
-try:
-    container = Container()
-    logger.info("Container inicializado com sucesso")
-except Exception as e:
-    logger.error(f"Container falhou, mas mantendo Flask ativo: {e}")
-    # Mantém container=None mas não crashea
-
+# Versão simplificada - sem Container complexo
+print("=== AVANTTI AI - VERSÃO SIMPLIFICADA ===")
 
 @app.route("/", methods=["GET"])
 def health_check():
     """Endpoint para verificar se o servidor está funcionando"""
     return jsonify({
         "status": "ok",
-        "message": "Flask está rodando!",
-        "container_ready": container is not None
+        "message": "Avantti AI está funcionando!",
+        "version": "simplified"
     }), 200
 
 
@@ -33,7 +22,7 @@ def health():
     return jsonify({
         "status": "healthy", 
         "service": "avantti-ai",
-        "container_status": "loaded" if container else "failed"
+        "version": "simplified"
     }), 200
 
 
@@ -45,27 +34,17 @@ def ping():
 
 @app.route("/message_receive", methods=["POST"])
 def message_receive() -> tuple:
-    if container is None:
-        logger.error("Container não inicializado")
-        return jsonify({"status": "error", "message": "Sistema não inicializado"}), 500
-    
+    """Endpoint para receber mensagens - versão simplificada"""
     payload: dict = request.get_json(silent=True) or {}
-
-    logger.info(
-        f"[ENDPOINT RECEIVE MESSAGE] Requisição recebida: \n{to_json_dump(payload)}"
-    )
-
-    try:
-        return container.controllers.process_incoming_message_controller.handle(
-            **payload
-        )
-
-    except Exception as err:
-        logger.exception(
-            f"[ENDPOINT RECEIVE MESSAGE] Erro ao processar endpoint /receive_message: {err}"
-        )
-
-        return jsonify({"status": "error"}), 400
+    
+    print(f"[MENSAGEM RECEBIDA] {payload}")
+    
+    # Por enquanto, só retorna sucesso
+    return jsonify({
+        "status": "received", 
+        "message": "Mensagem recebida com sucesso",
+        "data": payload
+    }), 200
 
 
 if __name__ == "__main__":

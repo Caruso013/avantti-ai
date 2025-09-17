@@ -68,3 +68,23 @@ tests/
 
 # Logs
 logs/
+
+# ARQUIVOS DESNECESSÁRIOS PARA DEPLOY SIMPLES
+agents/
+clients/
+container/
+controllers/
+cron_tasks/
+database/
+enums/
+exceptions/
+interfaces/
+repositories/
+services/
+tools/
+utils/
+workers/
+requirements.txt
+validate_config.py
+start_server.py
+server_simple.py
