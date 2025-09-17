@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import os
 import requests
+import json
 from dotenv import load_dotenv
 
 # Carrega variáveis de ambiente
@@ -11,8 +12,139 @@ app = Flask(__name__)
 # Versão para produção
 print("=== AVANTTI AI - PRODUCTION ===")
 
-def gerar_resposta_openai(mensagem):
-    """Gera resposta usando OpenAI"""
+# Configurações do Supabase
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
+
+def buscar_contexto_conversa(phone):
+    """Busca o histórico de conversa de um cliente no Supabase"""
+    try:
+        headers = {
+            'apikey': SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Busca mensagens do cliente ordenadas por data
+        url = f"{SUPABASE_URL}/rest/v1/messages"
+        params = {
+            'customer_phone': f'eq.{phone}',
+            'order': 'created_at.asc',
+            'limit': '20'  # Últimas 20 mensagens
+        }
+        
+        response = requests.get(url, headers=headers, params=params)
+        
+        if response.status_code == 200:
+            mensagens = response.json()
+            contexto = []
+            
+            for msg in mensagens:
+                role = "user" if msg['is_customer'] else "assistant"
+                contexto.append({
+                    "role": role,
+                    "content": msg['content']
+                })
+            
+            return contexto
+        else:
+            print(f"[ERRO] Buscar contexto: {response.status_code}")
+            return []
+            
+    except Exception as e:
+        print(f"[ERRO] Buscar contexto: {e}")
+        return []
+
+def salvar_mensagem_supabase(phone, content, is_customer=True):
+    """Salva mensagem no Supabase"""
+    try:
+        headers = {
+            'apikey': SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Primeiro, busca ou cria o cliente
+        customer_url = f"{SUPABASE_URL}/rest/v1/customers"
+        customer_params = {
+            'phone': f'eq.{phone}'
+        }
+        
+        customer_response = requests.get(customer_url, headers=headers, params=customer_params)
+        
+        if customer_response.status_code == 200:
+            customers = customer_response.json()
+            
+            if not customers:
+                # Cria novo cliente
+                customer_data = {
+                    'phone': phone,
+                    'name': phone  # Usar phone como nome inicialmente
+                }
+                
+                create_response = requests.post(customer_url, headers=headers, json=customer_data)
+                if create_response.status_code != 201:
+                    print(f"[ERRO] Criar cliente: {create_response.status_code}")
+                    return False
+        
+        # Salva a mensagem
+        message_data = {
+            'customer_phone': phone,
+            'content': content,
+            'is_customer': is_customer
+        }
+        
+        message_url = f"{SUPABASE_URL}/rest/v1/messages"
+        message_response = requests.post(message_url, headers=headers, json=message_data)
+        
+        if message_response.status_code == 201:
+            print(f"[SUCESSO] Mensagem salva: {content[:30]}...")
+            return True
+        else:
+            print(f"[ERRO] Salvar mensagem: {message_response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"[ERRO] Salvar mensagem: {e}")
+        return False
+
+def processar_novo_lead(phone):
+    """Processa um novo lead qualificado e notifica equipe"""
+    try:
+        # Salva o lead na base
+        headers = {
+            'apikey': SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        lead_data = {
+            'customer_phone': phone,
+            'status': 'qualified',
+            'source': 'whatsapp_ai'
+        }
+        
+        lead_url = f"{SUPABASE_URL}/rest/v1/leads"
+        lead_response = requests.post(lead_url, headers=headers, json=lead_data)
+        
+        if lead_response.status_code == 201:
+            print(f"[SUCESSO] Lead criado: {phone}")
+            
+            # Notifica o lead sobre contato da equipe
+            mensagem_lead = "Perfeito! Nossa equipe de vendas entrará em contato com você em breve para agendar a visita e tirar todas as suas dúvidas. Obrigada pelo interesse!"
+            enviar_mensagem_zapi(phone, mensagem_lead)
+            
+            return True
+        else:
+            print(f"[ERRO] Criar lead: {lead_response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"[ERRO] Processar lead: {e}")
+        return False
+
+def gerar_resposta_openai(mensagem, phone=None, contexto=None):
+    """Gera resposta usando OpenAI com contexto e function calls"""
     try:
         openai_key = os.getenv('OPENAI_API_KEY')
         if not openai_key:
@@ -24,12 +156,11 @@ def gerar_resposta_openai(mensagem):
             'Content-Type': 'application/json'
         }
         
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": """Você é a Eliane, SDR da Evex Imóveis, especializada em empreendimentos residenciais. 
+        # Monta mensagens com contexto
+        messages = [
+            {
+                "role": "system", 
+                "content": """Você é a Eliane, SDR da Evex Imóveis, especializada em empreendimentos residenciais. 
 
 Seu objetivo é qualificar leads que vieram de anúncios do Facebook interessados em imóveis. Siga este fluxo:
 
@@ -47,13 +178,45 @@ Seu objetivo é qualificar leads que vieram de anúncios do Facebook interessado
 
 7. Agende visita: "Podemos agendar uma visita sem compromisso para você conhecer o empreendimento pessoalmente. Gostaria?"
 
+Quando o lead demonstrar interesse real (responder sobre finalidade, timing, valores), use a function call 'processar_novo_lead' para notificar a equipe.
+
 Seja sempre simpática, humana, use frases curtas e objetivas. Tom formal-casual."""
-                },
-                {
-                    "role": "user", 
-                    "content": mensagem
+            }
+        ]
+        
+        # Adiciona contexto se disponível
+        if contexto:
+            messages.extend(contexto)
+        
+        # Adiciona mensagem atual
+        messages.append({
+            "role": "user", 
+            "content": mensagem
+        })
+        
+        # Function call para processar lead
+        functions = [
+            {
+                "name": "processar_novo_lead",
+                "description": "Chama quando o lead está qualificado e interessado",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "motivo": {
+                            "type": "string",
+                            "description": "Motivo da qualificação"
+                        }
+                    },
+                    "required": ["motivo"]
                 }
-            ],
+            }
+        ]
+        
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": messages,
+            "functions": functions,
+            "function_call": "auto",
             "max_tokens": 150,
             "temperature": 0.7
         }
@@ -67,7 +230,21 @@ Seja sempre simpática, humana, use frases curtas e objetivas. Tom formal-casual
         
         if response.status_code == 200:
             result = response.json()
-            resposta = result['choices'][0]['message']['content'].strip()
+            choice = result['choices'][0]
+            message = choice['message']
+            
+            # Verifica se há function call
+            if 'function_call' in message:
+                function_call = message['function_call']
+                if function_call['name'] == 'processar_novo_lead' and phone:
+                    print(f"[FUNCTION] Processando novo lead: {phone}")
+                    processar_novo_lead(phone)
+                
+                # Gera resposta padrão após function call
+                resposta = "Perfeito! Nossa equipe de vendas entrará em contato com você em breve. Obrigada pelo interesse!"
+            else:
+                resposta = message['content'].strip()
+            
             print(f"[IA] Resposta gerada para: {mensagem[:30]}...")
             return resposta
         else:
@@ -178,8 +355,17 @@ def message_receive() -> tuple:
         
         print(f"[PROCESSANDO] '{mensagem_texto}' de {numero_remetente}")
         
-        # Gera resposta da IA
-        resposta_ia = gerar_resposta_openai(mensagem_texto)
+        # Salva mensagem do cliente
+        salvar_mensagem_supabase(numero_remetente, mensagem_texto, is_customer=True)
+        
+        # Busca contexto da conversa
+        contexto = buscar_contexto_conversa(numero_remetente)
+        
+        # Gera resposta da IA com contexto
+        resposta_ia = gerar_resposta_openai(mensagem_texto, numero_remetente, contexto)
+        
+        # Salva resposta da IA
+        salvar_mensagem_supabase(numero_remetente, resposta_ia, is_customer=False)
         
         # Envia resposta via Z-API
         sucesso_envio = enviar_mensagem_zapi(numero_remetente, resposta_ia)
