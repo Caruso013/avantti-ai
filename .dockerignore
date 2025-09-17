@@ -84,7 +84,6 @@ services/
 tools/
 utils/
 workers/
-requirements.txt
 validate_config.py
 start_server.py
 server_simple.py
