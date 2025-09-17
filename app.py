@@ -35,13 +35,6 @@ def health():
         "service": "avantti-ai",
         "container_status": "loaded" if container else "failed"
     }), 200
-    return jsonify({"status": "ok", "message": "Avantti AI API está funcionando!"})
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    """Endpoint alternativo de health check"""
-    return jsonify({"status": "healthy", "service": "avantti-ai", "version": "1.0"})
 
 
 @app.route("/ping", methods=["GET"])
