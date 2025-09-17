@@ -19,12 +19,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Set environment variables
+# Set environment variables  
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+ENV FORCE_REBUILD=v2.0
 
 # Expose port 5000
 EXPOSE 5000
 
-# Executa o app minimal para debug
+# Executa o app minimal para debug - REBUILD FORCED
 CMD ["python", "app_minimal.py"]

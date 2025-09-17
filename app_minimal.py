@@ -23,7 +23,7 @@ def health():
     }), 200
 
 if __name__ == "__main__":
-    print("=== FLASK MINIMAL ===")
+    print("=== FLASK MINIMAL v2.0 - REBUILD FORCED ===")
     port = 5000
-    print(f"Starting on 0.0.0.0:{port}")
+    print(f"Starting on 0.0.0.0:{port} [MINIMAL BUILD]")
     app.run(host="0.0.0.0", port=port, debug=False)
