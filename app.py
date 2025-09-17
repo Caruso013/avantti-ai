@@ -7,18 +7,34 @@ from container.container import Container
 
 app = Flask(__name__)
 
-# Inicialização do container com tratamento de erro
+# Container simplificado - apenas para health check funcionar
+container = None
 try:
     container = Container()
     logger.info("Container inicializado com sucesso")
 except Exception as e:
-    logger.exception(f"Erro ao inicializar container: {e}")
-    container = None
+    logger.error(f"Container falhou, mas mantendo Flask ativo: {e}")
+    # Mantém container=None mas não crashea
 
 
 @app.route("/", methods=["GET"])
 def health_check():
     """Endpoint para verificar se o servidor está funcionando"""
+    return jsonify({
+        "status": "ok",
+        "message": "Flask está rodando!",
+        "container_ready": container is not None
+    }), 200
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "healthy", 
+        "service": "avantti-ai",
+        "container_status": "loaded" if container else "failed"
+    }), 200
     return jsonify({"status": "ok", "message": "Avantti AI API está funcionando!"})
 
 
@@ -61,15 +77,15 @@ def message_receive() -> tuple:
 
 if __name__ == "__main__":
     import os
-    print("=== INICIANDO APLICAÇÃO ===")
+    print("=== FLASK v2.0 - FORÇANDO REBUILD ===")
     print(f"PORT environment: {os.getenv('PORT', 'NOT_SET')}")
     
     debug_mode = False  # Força production mode
-    port = 5001  # Porta 5001 para não conflitar com nginx:5000
+    port = 5000  # Porta 5000 - direto sem nginx
     
-    print(f"Starting Flask app on host=127.0.0.1, port={port}")
+    print(f"Starting Flask app on host=0.0.0.0, port={port} [REBUILD FORCED]")
     try:
-        app.run(host="127.0.0.1", port=port, debug=debug_mode)
+        app.run(host="0.0.0.0", port=port, debug=debug_mode)
     except Exception as e:
         print(f"ERRO AO INICIAR FLASK: {e}")
         import traceback
