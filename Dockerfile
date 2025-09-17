@@ -40,7 +40,7 @@ RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf || tru
       '    proxy_send_timeout 300;' \
       '' \
       '    location / {' \
-      '        proxy_pass http://127.0.0.1:5001;' \
+      '        proxy_pass http://127.0.0.1:3000;' \
       '        proxy_set_header Host $host;' \
       '        proxy_set_header X-Real-IP $remote_addr;' \
       '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
@@ -77,7 +77,7 @@ RUN printf '%s\n' \
       > /etc/supervisor/conf.d/supervisord.conf
 
 # Expose port
-EXPOSE 8080
+EXPOSE 5000
 
 # Start both services with supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
