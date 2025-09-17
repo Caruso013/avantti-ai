@@ -48,16 +48,18 @@ def message_receive() -> tuple:
 
 
 if __name__ == "__main__":
-    print("=== AVANTTI AI - DEPLOY FINAL ===")
-    print(f"PORT environment: {os.getenv('PORT', 'NOT_SET')}")
+    print("🚀 === AVANTTI AI - VERSÃO FINAL v4 === 🚀")
+    print("🔥 NOVO BUILD - CACHE QUEBRADO!")
+    print(f"📡 PORT environment: {os.getenv('PORT', 'DEFAULT_5000')}")
     
-    debug_mode = False  # Production mode
-    port = 5000  # Porta fixa 5000
+    port = int(os.getenv('PORT', 5000))
     
-    print(f"Starting Flask app on host=0.0.0.0, port={port} [FINAL VERSION]")
+    print(f"🌐 STARTING on host=0.0.0.0, port={port}")
+    print("✅ ACEITA CONEXÕES EXTERNAS!")
+    
     try:
-        app.run(host="0.0.0.0", port=port, debug=debug_mode)
+        app.run(host="0.0.0.0", port=port, debug=False)
     except Exception as e:
-        print(f"ERRO AO INICIAR FLASK: {e}")
+        print(f"❌ ERRO: {e}")
         import traceback
         traceback.print_exc()

@@ -1,24 +1,25 @@
-# Dockerfile SIMPLIFICADO para app.py principal
+# NOVO DOCKERFILE - FORÇA REBUILD TOTAL v4
 FROM python:3.11-slim
 
-# Diretório de trabalho
+# Cache buster crítico
+ENV CACHE_BUSTER=v20250917_FINAL_FIX
+
 WORKDIR /app
 
-# Copia requirements simples primeiro
-COPY requirements.simple.txt .
+# Copia requirements
+COPY requirements.simple.txt requirements.txt
 
-# Instala apenas Flask
-RUN pip install --no-cache-dir -r requirements.simple.txt
+# Força reinstalação
+RUN pip install --no-cache-dir --force-reinstall flask
 
-# Copia apenas o arquivo principal
+# Copia app
 COPY app.py .
 
-# Variáveis de ambiente
+# Env vars críticas
 ENV PYTHONUNBUFFERED=1
-ENV FLASK_ENV=production
+ENV PORT=5000
 
-# Expõe porta 5000
 EXPOSE 5000
 
-# Comando principal
-CMD ["python", "app.py"]
+# Comando com flag verbosa
+CMD ["python", "-u", "app.py"]
