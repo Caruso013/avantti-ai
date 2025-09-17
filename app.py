@@ -1,6 +1,11 @@
 from flask import Flask, request, jsonify
 import os
 import requests
+import json
+import threading
+import time
+from queue import Queue
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Carrega variáveis de ambiente
@@ -8,30 +13,273 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Versão simplificada - sem Container complexo
-print("=== AVANTTI AI - VERSÃO SIMPLIFICADA ===")
+# Versão simplificada - com filas em memória
+print("=== AVANTTI AI - VERSÃO COM FILAS ===")
 
-def gerar_resposta_openai(mensagem):
-    """Gera resposta usando OpenAI"""
+# Sistema de filas em memória
+message_queues = {}  # {phone: Queue}
+processing_lock = threading.Lock()
+
+def get_queue_for_phone(phone):
+    """Obtém ou cria uma fila para um telefone específico"""
+    if phone not in message_queues:
+        message_queues[phone] = Queue()
+    return message_queues[phone]
+
+def process_message_queue(phone):
+    """Processa mensagens da fila de um telefone específico"""
+    queue = get_queue_for_phone(phone)
+    
+    while not queue.empty():
+        try:
+            message_data = queue.get()
+            mensagem_texto = message_data['message']
+            
+            print(f"[FILA] Processando: '{mensagem_texto}' de {phone}")
+            
+            # Salva mensagem do cliente
+            salvar_mensagem_supabase(phone, mensagem_texto, is_customer=True)
+            
+            # Busca contexto da conversa
+            contexto = buscar_contexto_conversa(phone)
+            
+            # Gera resposta da IA com contexto
+            resposta_ia = gerar_resposta_openai(mensagem_texto, phone, contexto)
+            
+            # Salva resposta da IA
+            salvar_mensagem_supabase(phone, resposta_ia, is_customer=False)
+            
+            # Envia resposta via Z-API
+            enviar_mensagem_zapi(phone, resposta_ia)
+            
+            queue.task_done()
+            
+            # Pequena pausa entre mensagens para evitar spam
+            time.sleep(1)
+            
+        except Exception as e:
+            print(f"[ERRO] Processamento da fila: {e}")
+            queue.task_done()
+
+def start_queue_processor(phone):
+    """Inicia processador de fila em thread separada"""
+    with processing_lock:
+        # Verifica se já está processando
+        if hasattr(start_queue_processor, 'processing') and phone in start_queue_processor.processing:
+            return
+        
+        if not hasattr(start_queue_processor, 'processing'):
+            start_queue_processor.processing = set()
+        
+        start_queue_processor.processing.add(phone)
+    
+    def worker():
+        try:
+            process_message_queue(phone)
+        finally:
+            with processing_lock:
+                start_queue_processor.processing.discard(phone)
+    
+    thread = threading.Thread(target=worker)
+    thread.daemon = True
+    thread.start()
+
+def get_supabase_client():
+    """Retorna headers para requisições Supabase"""
+    return {
+        'apikey': os.getenv('SUPABASE_KEY'),
+        'Authorization': f"Bearer {os.getenv('SUPABASE_KEY')}",
+        'Content-Type': 'application/json'
+    }
+
+def buscar_contexto_conversa(telefone):
+    """Busca mensagens anteriores do telefone no Supabase"""
+    try:
+        supabase_url = os.getenv('SUPABASE_URL')
+        headers = get_supabase_client()
+        
+        # Busca as últimas 10 mensagens do telefone
+        url = f"{supabase_url}/rest/v1/messages"
+        params = {
+            'phone': f'eq.{telefone}',
+            'order': 'created_at.desc',
+            'limit': '10'
+        }
+        
+        response = requests.get(url, headers=headers, params=params)
+        
+        if response.status_code == 200:
+            mensagens = response.json()
+            # Converte para formato de contexto do OpenAI (ordem cronológica)
+            contexto = []
+            for msg in reversed(mensagens):  # Reverte para ordem cronológica
+                role = "user" if msg['direction'] == 'inbound' else "assistant"
+                contexto.append({
+                    "role": role,
+                    "content": msg['content']
+                })
+            return contexto
+        else:
+            print(f"[ERRO] Erro ao buscar contexto: {response.status_code}")
+            return []
+            
+    except Exception as e:
+        print(f"[ERRO] Erro ao buscar contexto: {e}")
+        return []
+
+def salvar_mensagem_supabase(telefone, conteudo, direcao, message_id=None):
+    """Salva mensagem no Supabase"""
+    try:
+        supabase_url = os.getenv('SUPABASE_URL')
+        headers = get_supabase_client()
+        
+        # Busca ou cria customer
+        customer_id = obter_ou_criar_customer(telefone)
+        
+        # Busca ou cria thread
+        thread_id = obter_ou_criar_thread(customer_id)
+        
+        # Salva a mensagem
+        url = f"{supabase_url}/rest/v1/messages"
+        data = {
+            'thread_id': thread_id,
+            'phone': telefone,
+            'content': conteudo,
+            'direction': direcao,  # 'inbound' ou 'outbound'
+            'message_type': 'text',
+            'processed_at': datetime.now().isoformat(),
+            'metadata': {'message_id': message_id} if message_id else {}
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code == 201:
+            print(f"[SUPABASE] Mensagem salva: {direcao} - {telefone}")
+            return True
+        else:
+            print(f"[ERRO] Erro ao salvar mensagem: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"[ERRO] Erro ao salvar mensagem: {e}")
+        return False
+
+def obter_ou_criar_customer(telefone):
+    """Busca ou cria customer no Supabase"""
+    try:
+        supabase_url = os.getenv('SUPABASE_URL')
+        headers = get_supabase_client()
+        
+        # Busca customer existente
+        url = f"{supabase_url}/rest/v1/customers"
+        params = {'phone': f'eq.{telefone}'}
+        
+        response = requests.get(url, headers=headers, params=params)
+        
+        if response.status_code == 200:
+            customers = response.json()
+            if customers:
+                return customers[0]['id']
+            
+            # Se não existe, cria novo
+            data = {'phone': telefone}
+            response = requests.post(url, headers=headers, json=data)
+            
+            if response.status_code == 201:
+                return response.json()[0]['id']
+        
+        return None
+        
+    except Exception as e:
+        print(f"[ERRO] Erro ao obter/criar customer: {e}")
+        return None
+
+def obter_ou_criar_thread(customer_id):
+    """Busca ou cria thread no Supabase"""
+    try:
+        supabase_url = os.getenv('SUPABASE_URL')
+        headers = get_supabase_client()
+        
+        # Busca thread existente
+        url = f"{supabase_url}/rest/v1/threads"
+        params = {'customer_id': f'eq.{customer_id}', 'status': 'eq.active'}
+        
+        response = requests.get(url, headers=headers, params=params)
+        
+        if response.status_code == 200:
+            threads = response.json()
+            if threads:
+                return threads[0]['id']
+            
+            # Se não existe, cria nova
+            data = {'customer_id': customer_id}
+            response = requests.post(url, headers=headers, json=data)
+            
+            if response.status_code == 201:
+                return response.json()[0]['id']
+        
+        return None
+        
+    except Exception as e:
+        print(f"[ERRO] Erro ao obter/criar thread: {e}")
+        return None
+
+def processar_novo_lead(argumentos_json, telefone):
+    """Processa function call de novo lead"""
+    try:
+        args = json.loads(argumentos_json)
+        
+        # Salva lead no Supabase
+        supabase_url = os.getenv('SUPABASE_URL')
+        headers = get_supabase_client()
+        
+        url = f"{supabase_url}/rest/v1/leads"
+        data = {
+            'lead_name': args.get('nome_lead', 'Lead WhatsApp'),
+            'phone': telefone,
+            'motivation': f"Interesse: {args.get('interesse', '')} | Finalidade: {args.get('finalidade', '')} | Timing: {args.get('timing', '')}",
+            'status': 'new_lead',
+            'source': 'whatsapp_eliane',
+            'metadata': args
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code == 201:
+            print(f"[LEAD] Novo lead salvo: {args.get('nome_lead')} - {telefone}")
+            return True
+        else:
+            print(f"[ERRO] Erro ao salvar lead: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"[ERRO] Erro ao processar lead: {e}")
+        return False
+
+def gerar_resposta_openai(mensagem, telefone):
+    """Gera resposta usando OpenAI com contexto e function calls"""
     try:
         openai_key = os.getenv('OPENAI_API_KEY')
         if not openai_key:
             print("[ERRO] OPENAI_API_KEY não encontrada")
             return "Desculpe, serviço temporariamente indisponível."
         
-        print(f"[IA] Gerando resposta para: '{mensagem}'")
+        print(f"[IA] Gerando resposta para: '{mensagem}' do telefone: {telefone}")
+        
+        # Busca contexto da conversa
+        contexto = buscar_contexto_conversa(telefone)
+        print(f"[CONTEXTO] Encontradas {len(contexto)} mensagens anteriores")
         
         headers = {
             'Authorization': f'Bearer {openai_key}',
             'Content-Type': 'application/json'
         }
         
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [
-                {
-                    "role": "system", 
-                    "content": """Você é a Eliane, SDR da Evex Imóveis, especializada em empreendimentos residenciais. 
+        # Monta mensagens com contexto
+        messages = [
+            {
+                "role": "system", 
+                "content": """Você é a Eliane, SDR da Evex Imóveis, especializada em empreendimentos residenciais. 
 
 Seu objetivo é qualificar leads que vieram de anúncios do Facebook interessados em imóveis. Siga este fluxo:
 
@@ -49,15 +297,65 @@ Seu objetivo é qualificar leads que vieram de anúncios do Facebook interessado
 
 7. Agende visita: "Podemos agendar uma visita sem compromisso para você conhecer o empreendimento pessoalmente. Gostaria?"
 
+IMPORTANTE: Se o lead demonstrar interesse real (quer visitar, pergunta sobre preços, quer mais informações), use a função 'notificar_novo_lead' para avisar nosso time de vendas.
+
 Seja sempre simpática, humana, use frases curtas e objetivas. Tom formal-casual."""
-                },
-                {
-                    "role": "user", 
-                    "content": mensagem
+            }
+        ]
+        
+        # Adiciona contexto histórico
+        messages.extend(contexto)
+        
+        # Adiciona mensagem atual
+        messages.append({
+            "role": "user", 
+            "content": mensagem
+        })
+        
+        # Define function calls disponíveis
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "notificar_novo_lead",
+                    "description": "Notifica o time de vendas quando um lead demonstra interesse real em imóveis",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "nome_lead": {
+                                "type": "string",
+                                "description": "Nome do lead interessado"
+                            },
+                            "telefone": {
+                                "type": "string", 
+                                "description": "Telefone do lead"
+                            },
+                            "interesse": {
+                                "type": "string",
+                                "description": "Tipo de interesse (ex: visita, mais informações, valores)"
+                            },
+                            "finalidade": {
+                                "type": "string",
+                                "description": "Finalidade do imóvel: morar ou investir"
+                            },
+                            "timing": {
+                                "type": "string",
+                                "description": "Prazo para compra (ex: próximos 6 meses, pesquisando)"
+                            }
+                        },
+                        "required": ["nome_lead", "telefone", "interesse"]
+                    }
                 }
-            ],
+            }
+        ]
+        
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": messages,
             "max_tokens": 150,
-            "temperature": 0.7
+            "temperature": 0.7,
+            "tools": tools,
+            "tool_choice": "auto"
         }
         
         print("[API] Fazendo requisição para OpenAI...")
@@ -65,16 +363,35 @@ Seja sempre simpática, humana, use frases curtas e objetivas. Tom formal-casual
             'https://api.openai.com/v1/chat/completions',
             headers=headers,
             json=data,
-            timeout=10
+            timeout=30
         )
         
         print(f"[STATUS] OpenAI Response Status: {response.status_code}")
         
         if response.status_code == 200:
             result = response.json()
-            resposta = result['choices'][0]['message']['content'].strip()
-            print(f"[SUCESSO] Resposta gerada: '{resposta}'")
-            return resposta
+            
+            # Verifica se há function calls
+            choice = result['choices'][0]
+            message = choice['message']
+            
+            if message.get('tool_calls'):
+                # Processa function calls
+                for tool_call in message['tool_calls']:
+                    if tool_call['function']['name'] == 'notificar_novo_lead':
+                        processar_novo_lead(tool_call['function']['arguments'], telefone)
+                
+                # Retorna mensagem de confirmação sobre o contato
+                return "Perfeito! Registrei seu interesse. Nossa equipe comercial entrará em contato em breve para apresentar as melhores opções para você. Enquanto isso, posso esclarecer alguma dúvida?"
+            
+            # Se não há function calls, retorna resposta normal
+            if message.get('content'):
+                resposta = message['content'].strip()
+                print(f"[SUCESSO] Resposta gerada: '{resposta}'")
+                return resposta
+            else:
+                return "Olá! Como posso ajudar você com informações sobre nossos empreendimentos?"
+                
         else:
             print(f"[ERRO] OpenAI: {response.status_code} - {response.text}")
             return "Desculpe, ocorreu um erro. Tente novamente em alguns instantes."
@@ -83,7 +400,7 @@ Seja sempre simpática, humana, use frases curtas e objetivas. Tom formal-casual
         print(f"[ERRO] Erro ao gerar resposta: {e}")
         import traceback
         traceback.print_exc()
-        return "Olá! Obrigado pela mensagem. Nossa equipe retornará em breve."
+        return "Desculpe, ocorreu um erro. Tente novamente em alguns instantes."
 
 def enviar_mensagem_zapi(numero, mensagem):
     """Envia mensagem via Z-API"""
@@ -182,14 +499,13 @@ def ping():
 
 @app.route("/message_receive", methods=["POST"])
 def message_receive() -> tuple:
-    """Endpoint para receber mensagens - com IA integrada"""
+    """Endpoint para receber mensagens - com sistema de filas"""
     payload: dict = request.get_json(silent=True) or {}
     
     print(f"[MENSAGEM RECEBIDA] {payload}")
     
     try:
         # Extrai dados da mensagem do Z-API
-        # Z-API estrutura: {'text': {'message': 'conteúdo'}, 'phone': 'numero'}
         texto_obj = payload.get('text', {})
         mensagem_texto = texto_obj.get('message', '') if isinstance(texto_obj, dict) else str(texto_obj)
         numero_remetente = payload.get('phone', '')
@@ -204,30 +520,26 @@ def message_receive() -> tuple:
             print("[AVISO] Mensagem enviada pelo bot - ignorando")
             return jsonify({"status": "ignored", "reason": "from_bot"}), 200
         
-        print(f"[PROCESSANDO] '{mensagem_texto}' de {numero_remetente}")
+        print(f"[FILA] Adicionando mensagem '{mensagem_texto}' de {numero_remetente}")
         
-        # Gera resposta da IA
-        resposta_ia = gerar_resposta_openai(mensagem_texto)
-        print(f"[IA RESPOSTA] {resposta_ia}")
+        # Adiciona mensagem à fila específica do telefone
+        queue = get_queue_for_phone(numero_remetente)
+        queue.put({
+            'message': mensagem_texto,
+            'timestamp': datetime.now().isoformat(),
+            'phone': numero_remetente
+        })
         
-        # Envia resposta via Z-API
-        sucesso_envio = enviar_mensagem_zapi(numero_remetente, resposta_ia)
+        # Inicia processador de fila se não estiver rodando
+        start_queue_processor(numero_remetente)
         
-        if sucesso_envio:
-            return jsonify({
-                "status": "processed",
-                "message": "Mensagem processada e resposta enviada",
-                "ia_response": resposta_ia
-            }), 200
-        else:
-            return jsonify({
-                "status": "generated_only",
-                "message": "IA gerou resposta mas falha no envio",
-                "ia_response": resposta_ia
-            }), 200
+        return jsonify({
+            "status": "queued",
+            "message": "Mensagem adicionada à fila de processamento"
+        }), 200
             
     except Exception as e:
-        print(f"[ERRO] Erro no processamento: {e}")
+        print(f"[ERRO] Processamento: {e}")
         return jsonify({
             "status": "error", 
             "message": f"Erro: {str(e)}"
