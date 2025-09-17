@@ -48,14 +48,13 @@ def message_receive() -> tuple:
 
 
 if __name__ == "__main__":
-    import os
-    print("=== FLASK v2.0 - FORÇANDO REBUILD ===")
+    print("=== AVANTTI AI - DEPLOY FINAL ===")
     print(f"PORT environment: {os.getenv('PORT', 'NOT_SET')}")
     
-    debug_mode = False  # Força production mode
-    port = 5000  # Porta 5000 - direto sem nginx
+    debug_mode = False  # Production mode
+    port = 5000  # Porta fixa 5000
     
-    print(f"Starting Flask app on host=0.0.0.0, port={port} [REBUILD FORCED]")
+    print(f"Starting Flask app on host=0.0.0.0, port={port} [FINAL VERSION]")
     try:
         app.run(host="0.0.0.0", port=port, debug=debug_mode)
     except Exception as e:
