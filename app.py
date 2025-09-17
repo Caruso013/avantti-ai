@@ -65,7 +65,7 @@ if __name__ == "__main__":
     print(f"PORT environment: {os.getenv('PORT', 'NOT_SET')}")
     
     debug_mode = False  # Força production mode
-    port = 8000  # Força porta 8000 para funcionar com nginx
+    port = 5000  # Porta 5000 (padrão Flask) - evita conflitos
     
     print(f"Starting Flask app on host=127.0.0.1, port={port}")
     try:
