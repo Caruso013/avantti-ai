@@ -64,12 +64,12 @@ if __name__ == "__main__":
     print("=== INICIANDO APLICAÇÃO ===")
     print(f"PORT environment: {os.getenv('PORT', 'NOT_SET')}")
     
-    debug_mode = os.getenv("FLASK_ENV") == "development"
-    port = int(os.getenv("PORT", 8000))
+    debug_mode = False  # Força production mode
+    port = 8000  # Força porta 8000 para funcionar com nginx
     
-    print(f"Starting Flask app on host=0.0.0.0, port={port}")
+    print(f"Starting Flask app on host=127.0.0.1, port={port}")
     try:
-        app.run(host="0.0.0.0", port=port, debug=debug_mode)
+        app.run(host="127.0.0.1", port=port, debug=debug_mode)
     except Exception as e:
         print(f"ERRO AO INICIAR FLASK: {e}")
         import traceback
