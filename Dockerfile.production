@@ -1,0 +1,38 @@
+# Dockerfile para produção - EasyPanel
+FROM python:3.11-slim
+
+# Variáveis de ambiente para produção
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=5000
+ENV FLASK_ENV=production
+
+# Cria usuário não-root para segurança
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Define diretório de trabalho
+WORKDIR /app
+
+# Copia arquivo de dependências
+COPY requirements.txt .
+
+# Instala dependências
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copia código da aplicação
+COPY app_production.py ./app.py
+COPY .env.example .env
+
+# Cria diretório de logs e ajusta permissões
+RUN mkdir -p logs && \
+    chown -R appuser:appuser /app
+
+# Muda para usuário não-root
+USER appuser
+
+# Expõe porta
+EXPOSE 5000
+
+# Comando de inicialização com Gunicorn para produção
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "--keep-alive", "2", "--max-requests", "1000", "--max-requests-jitter", "100", "app:app"]

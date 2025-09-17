@@ -1,15 +1,16 @@
-from flask import Flask, request, jsonify
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Teste local para simular o recebimento e processamento de mensagens
+"""
+
 import os
 import requests
+import json
 from dotenv import load_dotenv
 
 # Carrega variáveis de ambiente
 load_dotenv()
-
-app = Flask(__name__)
-
-# Versão simplificada - sem Container complexo
-print("=== AVANTTI AI - VERSÃO SIMPLIFICADA ===")
 
 def gerar_resposta_openai(mensagem):
     """Gera resposta usando OpenAI"""
@@ -134,101 +135,81 @@ def enviar_mensagem_zapi(numero, mensagem):
             
     except Exception as e:
         print(f"[ERRO] Erro Z-API: {e}")
-        return False
-
-@app.route("/", methods=["GET"])
-def health_check():
-    """Endpoint para verificar se o servidor está funcionando"""
-    return jsonify({
-        "status": "ok",
-        "message": "Avantti AI está funcionando!",
-        "version": "simplified"
-    }), 200
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy", 
-        "service": "avantti-ai",
-        "version": "simplified"
-    }), 200
-
-
-@app.route("/ping", methods=["GET"])
-def ping():
-    """Endpoint simples de ping"""
-    return "pong"
-
-
-@app.route("/message_receive", methods=["POST"])
-def message_receive() -> tuple:
-    """Endpoint para receber mensagens - com IA integrada"""
-    payload: dict = request.get_json(silent=True) or {}
-    
-    print(f"[MENSAGEM RECEBIDA] {payload}")
-    
-    try:
-        # Extrai dados da mensagem do Z-API
-        # Z-API estrutura: {'text': {'message': 'conteúdo'}, 'phone': 'numero'}
-        texto_obj = payload.get('text', {})
-        mensagem_texto = texto_obj.get('message', '') if isinstance(texto_obj, dict) else str(texto_obj)
-        numero_remetente = payload.get('phone', '')
-        
-        # Verifica se é uma mensagem válida
-        if not mensagem_texto or not numero_remetente:
-            print(f"[AVISO] Mensagem inválida - Texto: '{mensagem_texto}' | Número: '{numero_remetente}'")
-            return jsonify({"status": "ignored", "reason": "missing_data"}), 200
-        
-        # Ignora mensagens do próprio bot
-        if payload.get('fromMe', False):
-            print("[AVISO] Mensagem enviada pelo bot - ignorando")
-            return jsonify({"status": "ignored", "reason": "from_bot"}), 200
-        
-        print(f"[PROCESSANDO] '{mensagem_texto}' de {numero_remetente}")
-        
-        # Gera resposta da IA
-        resposta_ia = gerar_resposta_openai(mensagem_texto)
-        print(f"[IA RESPOSTA] {resposta_ia}")
-        
-        # Envia resposta via Z-API
-        sucesso_envio = enviar_mensagem_zapi(numero_remetente, resposta_ia)
-        
-        if sucesso_envio:
-            return jsonify({
-                "status": "processed",
-                "message": "Mensagem processada e resposta enviada",
-                "ia_response": resposta_ia
-            }), 200
-        else:
-            return jsonify({
-                "status": "generated_only",
-                "message": "IA gerou resposta mas falha no envio",
-                "ia_response": resposta_ia
-            }), 200
-            
-    except Exception as e:
-        print(f"[ERRO] Erro no processamento: {e}")
-        return jsonify({
-            "status": "error", 
-            "message": f"Erro: {str(e)}"
-        }), 500
-
-
-if __name__ == "__main__":
-    print("[STARTUP] === AVANTTI AI - VERSÃO FINAL v4 === ")
-    print("[STARTUP] NOVO BUILD - CACHE QUEBRADO!")
-    print(f"[CONFIG] PORT environment: {os.getenv('PORT', 'DEFAULT_5000')}")
-    
-    port = int(os.getenv('PORT', 5000))
-    
-    print(f"[SERVIDOR] STARTING on host=0.0.0.0, port={port}")
-    print("[REDE] ACEITA CONEXÕES EXTERNAS!")
-    
-    try:
-        app.run(host="0.0.0.0", port=port, debug=False)
-    except Exception as e:
-        print(f"[ERRO] ERRO: {e}")
         import traceback
         traceback.print_exc()
+        return False
+
+def simular_webhook():
+    """Simula o payload que seria recebido do webhook"""
+    # Payload similar ao que apareceu no seu log
+    payload = {
+        'isStatusReply': False,
+        'chatLid': '37680435998802@lid',
+        'connectedPhone': '554196260255',
+        'waitingMessage': False,
+        'isEdit': False,
+        'isGroup': False,
+        'isNewsletter': False,
+        'instanceId': '3E6CCAC06181F057FAF2FEB82DDB19DD',
+        'messageId': 'TESTE_LOCAL_123',
+        'phone': '5511991965237',  # Seu número do log
+        'fromMe': False,
+        'momment': 1758129901000,
+        'status': 'RECEIVED',
+        'chatName': 'Teste Local',
+        'senderPhoto': None,
+        'senderName': 'Teste Local',
+        'broadcast': False,
+        'participantLid': None,
+        'forwarded': False,
+        'type': 'ReceivedCallback',
+        'fromApi': False,
+        'text': {'message': 'teste local'}
+    }
+    
+    return payload
+
+def processar_mensagem_completa():
+    """Processa uma mensagem completa como faria o servidor"""
+    print("=" * 60)
+    print("TESTE LOCAL - PROCESSAMENTO COMPLETO DE MENSAGEM")
+    print("=" * 60)
+    
+    # 1. Simular recebimento do webhook
+    payload = simular_webhook()
+    print(f"[MENSAGEM RECEBIDA] {payload}")
+    
+    # 2. Extrair dados
+    texto_obj = payload.get('text', {})
+    mensagem_texto = texto_obj.get('message', '') if isinstance(texto_obj, dict) else str(texto_obj)
+    numero_remetente = payload.get('phone', '')
+    
+    # 3. Validações
+    if not mensagem_texto or not numero_remetente:
+        print(f"[AVISO] Mensagem inválida - Texto: '{mensagem_texto}' | Número: '{numero_remetente}'")
+        return
+    
+    if payload.get('fromMe', False):
+        print("[AVISO] Mensagem enviada pelo bot - ignorando")
+        return
+    
+    print(f"[PROCESSANDO] '{mensagem_texto}' de {numero_remetente}")
+    
+    # 4. Gerar resposta da IA
+    resposta_ia = gerar_resposta_openai(mensagem_texto)
+    print(f"[IA RESPOSTA] {resposta_ia}")
+    
+    # 5. Enviar resposta via Z-API
+    sucesso_envio = enviar_mensagem_zapi(numero_remetente, resposta_ia)
+    
+    # 6. Resultado final
+    print("\n" + "=" * 60)
+    if sucesso_envio:
+        print("[RESULTADO] MENSAGEM PROCESSADA E ENVIADA COM SUCESSO!")
+        print("Verifique seu WhatsApp para confirmar o recebimento.")
+    else:
+        print("[RESULTADO] MENSAGEM PROCESSADA MAS FALHA NO ENVIO")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    processar_mensagem_completa()
