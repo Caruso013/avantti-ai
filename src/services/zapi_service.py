@@ -2,25 +2,48 @@ import requests
 import time
 import logging
 import os
+import re
 from typing import List
 
 logger = logging.getLogger(__name__)
 
 class ZAPIService:
     def __init__(self):
-        self.instance = os.getenv('ZAPI_INSTANCE')
-        self.token = os.getenv('ZAPI_TOKEN')
-        self.base_url = f"https://api.z-api.io/instances/{self.instance}/token/{self.token}"
+        # Usando as variáveis corretas que funcionam no teste
+        self.base_url = os.getenv('ZAPI_BASE_URL', 'https://api.z-api.io')
+        self.instance_id = os.getenv('ZAPI_INSTANCE_ID')
+        self.instance_token = os.getenv('ZAPI_INSTANCE_TOKEN') 
+        self.client_token = os.getenv('ZAPI_CLIENT_TOKEN')
+        
+        # URL completa como no cliente que funciona
+        self.api_url = f"{self.base_url}/instances/{self.instance_id}/token/{self.instance_token}"
+    
+    def _resolve_phone(self, phone: str) -> str:
+        """Formata telefone como no cliente que funciona"""
+        # Coloca o número o prefixo 9 caso o número tenha 8 dígitos
+        if len(phone[4:]) == 8:
+            phone = f"{phone[:4]}9{phone[4:]}"
+
+        # Adiciona o DDI 55 caso não tenha
+        if not phone.startswith("55") and len(phone) == 11:
+            return f"55{phone}"
+
+        return phone
     
     def enviar_typing_indicator(self, phone):
         """Envia indicador de digitando"""
         try:
-            url = f"{self.base_url}/chats/{phone}/typing"
+            url = f"{self.api_url}/chats/{self._resolve_phone(phone)}/typing"
             data = {
                 "action": "on"
             }
             
-            response = requests.post(url, json=data, timeout=10)
+            headers = {
+                "Content-Type": "application/json",
+                "Client-Token": self.client_token
+            }
+            
+            response = requests.post(url, json=data, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 logger.info(f"Typing indicator enviado para {phone}")
@@ -36,12 +59,17 @@ class ZAPIService:
     def parar_typing_indicator(self, phone):
         """Para o indicador de digitando"""
         try:
-            url = f"{self.base_url}/chats/{phone}/typing"
+            url = f"{self.api_url}/chats/{self._resolve_phone(phone)}/typing"
             data = {
                 "action": "off"
             }
             
-            response = requests.post(url, json=data, timeout=10)
+            headers = {
+                "Content-Type": "application/json",
+                "Client-Token": self.client_token
+            }
+            
+            response = requests.post(url, json=data, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 logger.info(f"Typing indicator parado para {phone}")
@@ -55,30 +83,34 @@ class ZAPIService:
             return False
     
     def enviar_mensagem(self, phone, message):
-        """Envia mensagem simples pelo Z-API"""
+        """Envia mensagem simples pelo Z-API - FORMATO EXATO QUE FUNCIONA"""
         try:
-            url = f"{self.base_url}/send-text"
+            url = f"{self.api_url}/send-text"
             
-            # Formato correto para Z-API
+            # Formato EXATO que funcionou no teste
             data = {
-                "phone": phone,
+                "phone": self._resolve_phone(phone),
                 "message": message,
                 "delayTyping": 3
             }
             
-            # Headers necessários
+            # Headers EXATOS que funcionaram
             headers = {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Client-Token": self.client_token
             }
             
             response = requests.post(url, json=data, headers=headers, timeout=15)
             
             if response.status_code == 200:
                 logger.info(f"Mensagem enviada para {phone}")
+                logger.info(f"Response: {response.text}")
                 return True
             else:
                 logger.error(f"Erro ao enviar mensagem: {response.status_code}")
                 logger.error(f"Response: {response.text}")
+                logger.error(f"URL: {url}")
+                logger.error(f"Data: {data}")
                 return False
                 
         except Exception as e:
