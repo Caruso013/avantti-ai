@@ -46,4 +46,15 @@ dist/
 *.db
 *.sqlite3
 
+# Documentação (exceto README)
+*.md
+!README.md
+
+# Arquivos de teste
+test_*.py
+*_test.py
+teste_*.py
+*_teste.py
+app_test.py
+
 # credentials/
