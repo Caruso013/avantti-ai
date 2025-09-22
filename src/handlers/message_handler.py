@@ -1,5 +1,13 @@
 import logging
 import threading
+import os
+import sys
+
+# Garante que o diretório raiz está no path
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 from src.services.openai_service import OpenAIService
 from src.services.supabase_service import SupabaseService
 from src.services.zapi_service import ZAPIService

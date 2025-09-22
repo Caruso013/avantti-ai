@@ -1,11 +1,15 @@
 from flask import Flask, request, jsonify
 import os
+import sys
 import threading
 import time
 from queue import Queue
 from datetime import datetime
 from dotenv import load_dotenv
 import logging
+
+# Adiciona o diretório atual ao PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Imports dos novos módulos
 from src.handlers.message_handler import MessageHandler
