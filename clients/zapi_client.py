@@ -68,38 +68,26 @@ class ZAPIClient(IChat):
         return phone
 
     def __resolve_message(self, message: str) -> list[str]:
-        abrevs = [
-            "Av",
-            "R",
-            "Rua",
-            "Dr",
-            "Dra",
-            "Sr",
-            "Sra",
-            "Prof",
-            "Rod",
-            "Tv",
-            "Est",
-            "Sta",
-            "Sto",
-        ]
-
-        # Protege abreviações comuns
-        for ab in abrevs:
-            message = re.sub(rf"\b{ab}\.", f"{ab}<<P>>", message)
-
-        # Protege marcadores de lista (1. 2. 3. etc.)
-        message = re.sub(r"(?<=\b\d)\.", "<<N>>", message)
-
-        # Quebra sentenças reais (ponto final seguido de espaço ou fim de string)
-        sentences = re.split(r"\.(?:\s+|$)", message)
-
+        # Quebra mensagem simples: cada ponto ou interrogação resulta em uma mensagem separada
+        # Isso garante que cada pergunta seja enviada em mensagem separada
+        
+        # Quebra em ponto final ou interrogação seguidos de espaço ou fim de string
+        sentences = re.split(r'[.?](?:\s+|$)', message)
+        
+        # Remove sentenças vazias e espaços extras
         cleaned = []
         for s in sentences:
-            s = s.strip().replace("<<P>>", ".").replace("<<N>>", ".")
+            s = s.strip()
             if s:
-                cleaned.append(s if s.endswith(".") else s + ".")
-
+                # Adiciona pontuação apropriada se não termina com pontuação
+                if not re.search(r'[.!?]$', s):
+                    # Se parece uma pergunta, adiciona ?; senão adiciona .
+                    if any(word in s.lower() for word in ['como', 'quando', 'onde', 'qual', 'quanto', 'você', 'vocês', 'gostaria', 'pretende', 'tem']):
+                        s += '?'
+                    else:
+                        s += '.'
+                cleaned.append(s)
+        
         return cleaned
 
     def set_instance(self, instance: str, instance_key: str) -> None:

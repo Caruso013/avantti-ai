@@ -2,6 +2,7 @@ from interfaces.tools.tool_interface import ITool
 from container.clients import ClientContainer
 from container.repositories import RepositoryContainer
 from tools.crm_tool import CRMTool
+from tools.notificar_novo_lead_tool import NotificarNovoLeadTool
 
 
 class ToolContainer:
@@ -16,6 +17,10 @@ class ToolContainer:
             "crm": CRMTool(
                 ai_client=self._clients.ai,
                 database_client=self._clients.database,
+                chat_client=self._clients.evolution,
+            ),
+            "notificar_novo_lead": NotificarNovoLeadTool(
+                ai_client=self._clients.ai,
                 chat_client=self._clients.evolution,
             ),
         }

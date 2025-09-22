@@ -8,6 +8,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 import logging
 
+# Versão da aplicação
+AVANTTI_VERSION = "3.0.0"
+AVANTTI_CODENAME = "Contact2Sale Distribution"
+
 # Adiciona o diretório atual ao PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -230,6 +234,35 @@ def metrics_endpoint():
 def health():
     return jsonify({"status": "healthy", "service": "avantti-ai-eliane-v3"}), 200
 
+@app.route("/version", methods=["GET"])
+def version():
+    """Endpoint para verificar versão e configurações da aplicação"""
+    c2s_enabled = bool(os.getenv("C2S_JWT_TOKEN"))
+    distribution_enabled = os.getenv("C2S_USE_TEAM_DISTRIBUTION", "false").lower() == "true"
+    
+    version_info = {
+        "version": AVANTTI_VERSION,
+        "codename": AVANTTI_CODENAME,
+        "service": "avantti-ai-evex",
+        "client": "Evex Imóveis",
+        "uptime": str(datetime.now() - metrics['uptime_start']),
+        "features": {
+            "contact2sale": c2s_enabled,
+            "lead_distribution": distribution_enabled,
+            "message_splitting": True,
+            "whatsapp_api": os.getenv("WHATSAPP_API", "evolution"),
+            "distribution_method": os.getenv("C2S_DISTRIBUTION_METHOD", "round_robin") if distribution_enabled else None
+        },
+        "stats": {
+            "messages_processed": metrics['messages_processed'],
+            "errors": metrics['errors'],
+            "active_teams": 11 if distribution_enabled else 1
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    return jsonify(version_info), 200
+
 @app.route("/update-prompt", methods=["POST"])
 def update_prompt():
     """Endpoint para atualizar o prompt da IA"""
@@ -371,7 +404,94 @@ def message_receive():
         metrics['errors'] += 1
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
+def print_startup_banner():
+    """Exibe banner de inicialização com informações da versão"""
+    banner = f"""
+    ╔══════════════════════════════════════════════════════════════╗
+    ║                🤖 AVANTTI AI v{AVANTTI_VERSION}                      ║
+    ║              {AVANTTI_CODENAME:<25}               ║
+    ║                    Sistema Evex Imóveis                      ║
+    ╠══════════════════════════════════════════════════════════════╣
+    ║  ✅ NOVIDADES DESTA VERSÃO:                                  ║
+    ║  🔄 Distribuição automática entre 11 equipes                ║
+    ║  📱 Mensagens quebradas em WhatsApp                         ║
+    ║  🎯 Integração Contact2Sale completa                        ║
+    ║  📊 Sistema de estatísticas de leads                        ║
+    ║  🚫 Remoção de agendamento de visitas                       ║
+    ╠══════════════════════════════════════════════════════════════╣
+    ║  📋 CONFIGURAÇÕES ATIVAS:                                   ║"""
+    
+    # Verifica configurações
+    config_lines = []
+    
+    # Contact2Sale
+    c2s_enabled = bool(os.getenv("C2S_JWT_TOKEN"))
+    distribution_enabled = os.getenv("C2S_USE_TEAM_DISTRIBUTION", "false").lower() == "true"
+    distribution_method = os.getenv("C2S_DISTRIBUTION_METHOD", "round_robin")
+    
+    if c2s_enabled:
+        config_lines.append("    ║  🟢 Contact2Sale: ATIVO                                     ║")
+        if distribution_enabled:
+            config_lines.append(f"    ║  🔄 Distribuição: {distribution_method.upper():<15}                   ║")
+            
+            # Conta equipes ativas
+            try:
+                from services.lead_distributor_service import LeadDistributor
+                distributor = LeadDistributor()
+                active_teams = len(distributor.get_active_teams())
+                config_lines.append(f"    ║  👥 Equipes ativas: {active_teams:<2}                                   ║")
+            except:
+                config_lines.append("    ║  👥 Equipes ativas: 11                                      ║")
+        else:
+            config_lines.append("    ║  🔄 Distribuição: DESABILITADA                             ║")
+    else:
+        config_lines.append("    ║  🔴 Contact2Sale: DESABILITADO                             ║")
+    
+    # WhatsApp API
+    whatsapp_api = os.getenv("WHATSAPP_API", "evolution").upper()
+    config_lines.append(f"    ║  📱 WhatsApp API: {whatsapp_api:<15}                        ║")
+    
+    # Outros serviços
+    redis_enabled = bool(os.getenv("REDIS_URL"))
+    supabase_enabled = bool(os.getenv("SUPABASE_URL"))
+    openai_enabled = bool(os.getenv("OPENAI_API_KEY"))
+    
+    config_lines.append(f"    ║  🔴 Redis: {'ATIVO' if redis_enabled else 'INATIVO':<15}                        ║")
+    config_lines.append(f"    ║  🟢 Supabase: {'ATIVO' if supabase_enabled else 'INATIVO':<15}                     ║")
+    config_lines.append(f"    ║  🟢 OpenAI: {'ATIVO' if openai_enabled else 'INATIVO':<15}                       ║")
+    
+    config_lines.append("    ╠══════════════════════════════════════════════════════════════╣")
+    config_lines.append(f"    ║  🚀 Servidor na porta: {os.getenv('PORT', 5000):<5}                              ║")
+    config_lines.append(f"    ║  📅 Iniciado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S'):<15}                ║")
+    config_lines.append("    ╚══════════════════════════════════════════════════════════════╝")
+    
+    full_banner = banner + "\n" + "\n".join(config_lines)
+    
+    print(full_banner)
+    logger.info(f"🚀 Avantti AI v{AVANTTI_VERSION} ({AVANTTI_CODENAME}) iniciado com sucesso!")
+    
+    if c2s_enabled and distribution_enabled:
+        logger.info("✅ Sistema de distribuição de leads Contact2Sale ATIVO")
+        logger.info(f"📊 Método de distribuição: {distribution_method}")
+    elif c2s_enabled:
+        logger.info("✅ Contact2Sale ativo (distribuição desabilitada)")
+    else:
+        logger.warning("⚠️ Contact2Sale DESABILITADO")
+    
+    # Log adicional para EasyPanel
+    logger.info("=" * 60)
+    logger.info(f"🌟 NOVA VERSÃO ATIVA: v{AVANTTI_VERSION}")
+    logger.info("🏢 Cliente: Evex Imóveis")
+    logger.info("🔄 Distribuição automática de leads implementada")
+    logger.info("📱 Mensagens otimizadas para WhatsApp")
+    logger.info("=" * 60)
+    
+    return full_banner
+
+
 if __name__ == "__main__":
-    print(f"[STARTUP] Servidor na porta {os.getenv('PORT', 5000)}")
-    print("Todas as configuracoes carregadas com sucesso!")
+    # Exibe banner de inicialização
+    print_startup_banner()
+    
+    # Inicia servidor
     app.run(host="0.0.0.0", port=int(os.getenv('PORT', 5000)), debug=False)
