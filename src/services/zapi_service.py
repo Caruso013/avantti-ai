@@ -58,18 +58,27 @@ class ZAPIService:
         """Envia mensagem simples pelo Z-API"""
         try:
             url = f"{self.base_url}/send-text"
+            
+            # Formato correto para Z-API
             data = {
                 "phone": phone,
-                "message": message
+                "message": message,
+                "delayTyping": 3
             }
             
-            response = requests.post(url, json=data, timeout=15)
+            # Headers necessários
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(url, json=data, headers=headers, timeout=15)
             
             if response.status_code == 200:
                 logger.info(f"Mensagem enviada para {phone}")
                 return True
             else:
                 logger.error(f"Erro ao enviar mensagem: {response.status_code}")
+                logger.error(f"Response: {response.text}")
                 return False
                 
         except Exception as e:
