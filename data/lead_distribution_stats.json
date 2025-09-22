@@ -1,0 +1,112 @@
+{
+  "2025-09-22": {
+    "c9433557c1656dea3004165b6bcb7e2a": {
+      "team_name": "Evex Im\u00f3veis - Principal",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.558281",
+          "phone": "11999887766",
+          "name": "Jo\u00e3o Silva",
+          "source": ""
+        }
+      ]
+    },
+    "cb6909c5e37eeaafcc9cc6836c3803aa": {
+      "team_name": "Evex Im\u00f3veis - Corretores",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.560802",
+          "phone": "11888776655",
+          "name": "Maria Santos",
+          "source": ""
+        }
+      ]
+    },
+    "4f83feb6f3bd5ff1f4eee42b6bb0b154": {
+      "team_name": "Evex Im\u00f3veis - Equipe Uliane",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.563530",
+          "phone": "11666554433",
+          "name": "Ana Oliveira",
+          "source": ""
+        }
+      ]
+    },
+    "b9ea1217943e965bf7308a9dba5cd8f1": {
+      "team_name": "Evex Im\u00f3veis - Equipe Johnny",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.565780",
+          "phone": "11555443322",
+          "name": "Carlos Lima",
+          "source": ""
+        }
+      ]
+    },
+    "88367ead3e3a8bbf5d1f439845ab74a9": {
+      "team_name": "Evex Im\u00f3veis - Silvio",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.568826",
+          "phone": "11444332211",
+          "name": "Lucia Ferreira",
+          "source": ""
+        }
+      ]
+    },
+    "a97d32e9c6272650e5edd5975f59e70c": {
+      "team_name": "Evex Im\u00f3veis - Equipe Laiana",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.571540",
+          "phone": "11222110099",
+          "name": "Julia Mendes",
+          "source": ""
+        }
+      ]
+    },
+    "8f13cdadcaafcf5089d78c7f385ac1db": {
+      "team_name": "Evex Im\u00f3veis - Equipe Ludovico",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.574263",
+          "phone": "11111009988",
+          "name": "Fernando Alves",
+          "source": ""
+        }
+      ]
+    },
+    "012b545e89037c5b690192f9eefd272e": {
+      "team_name": "Evex Im\u00f3veis - Equipe Irineu",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:45.577482",
+          "phone": "11000998877",
+          "name": "Amanda Rocha",
+          "source": ""
+        }
+      ]
+    },
+    "9f05463d94a6cdd3c85378ad1709ddd6": {
+      "team_name": "Evex Im\u00f3veis - Equipe CH STO Antonio",
+      "leads_count": 1,
+      "leads": [
+        {
+          "timestamp": "2025-09-22T18:23:47.673914",
+          "phone": "5511999000111",
+          "name": "Cliente Teste Distribui\u00e7\u00e3o",
+          "source": "WhatsApp IA - Teste Distribui\u00e7\u00e3o"
+        }
+      ]
+    }
+  }
+}

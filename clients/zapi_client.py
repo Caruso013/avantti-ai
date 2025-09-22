@@ -68,27 +68,171 @@ class ZAPIClient(IChat):
         return phone
 
     def __resolve_message(self, message: str) -> list[str]:
-        # Quebra mensagem simples: cada ponto ou interrogação resulta em uma mensagem separada
-        # Isso garante que cada pergunta seja enviada em mensagem separada
+        """
+        Quebra mensagens de forma inteligente:
+        - Máximo 3 linhas por mensagem
+        - Remove confirmações corriqueiras  
+        - Separa perguntas em mensagens diferentes
+        - Cria fluxo mais natural e dinâmico
+        """
         
-        # Quebra em ponto final ou interrogação seguidos de espaço ou fim de string
-        sentences = re.split(r'[.?](?:\s+|$)', message)
+        # Remove confirmações corriqueiras e palavras desnecessárias
+        message = self._clean_common_confirmations(message)
         
-        # Remove sentenças vazias e espaços extras
-        cleaned = []
-        for s in sentences:
-            s = s.strip()
-            if s:
-                # Adiciona pontuação apropriada se não termina com pontuação
-                if not re.search(r'[.!?]$', s):
-                    # Se parece uma pergunta, adiciona ?; senão adiciona .
-                    if any(word in s.lower() for word in ['como', 'quando', 'onde', 'qual', 'quanto', 'você', 'vocês', 'gostaria', 'pretende', 'tem']):
-                        s += '?'
-                    else:
-                        s += '.'
-                cleaned.append(s)
+        if not message.strip():
+            return ["Olá! Como posso ajudar você?"]
+        
+        # Quebra inicial por pontos e interrogações, mantendo contexto
+        sentences = self._smart_sentence_split(message)
+        
+        # Agrupa sentenças em mensagens inteligentes
+        messages = self._group_sentences_smartly(sentences)
+        
+        return [msg for msg in messages if msg.strip()]
+    
+    def _smart_sentence_split(self, message: str) -> list[str]:
+        """Quebra texto de forma mais inteligente"""
+        
+        # Quebra por pontos finais, mas preserva contexto
+        parts = re.split(r'\.(?:\s+|$)', message)
+        sentences = []
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+                
+            # Se contém interrogação, quebra também por ela
+            if '?' in part:
+                subparts = re.split(r'\?(?:\s+|$)', part)
+                for subpart in subparts:
+                    subpart = subpart.strip()
+                    if subpart:
+                        # Adiciona ? se é pergunta
+                        if self._is_question(subpart):
+                            sentences.append(subpart + '?')
+                        else:
+                            sentences.append(subpart)
+            else:
+                # Adiciona ponto se necessário
+                if part and not part.endswith(('.', '!', '?')):
+                    part += '.'
+                sentences.append(part)
+        
+        return [s for s in sentences if s.strip()]
+    
+    def _group_sentences_smartly(self, sentences: list) -> list[str]:
+        """Agrupa sentenças de forma inteligente"""
+        
+        if not sentences:
+            return []
+        
+        messages = []
+        current_group = []
+        current_length = 0
+        
+        for sentence in sentences:
+            is_question = self._is_question(sentence)
+            sentence_length = len(sentence)
+            
+            # Perguntas sempre ficam sozinhas ou iniciam novo grupo
+            if is_question:
+                # Finaliza grupo atual se existe
+                if current_group:
+                    messages.append(' '.join(current_group))
+                    current_group = []
+                    current_length = 0
+                
+                # Pergunta vai sozinha
+                messages.append(sentence)
+            else:
+                # Se adicionar esta sentença vai ultrapassar ~180 chars (3 linhas), quebra
+                if current_length + sentence_length > 180 and current_group:
+                    messages.append(' '.join(current_group))
+                    current_group = [sentence]
+                    current_length = sentence_length
+                else:
+                    current_group.append(sentence)
+                    current_length += sentence_length
+        
+        # Adiciona último grupo se existe
+        if current_group:
+            messages.append(' '.join(current_group))
+        
+        return messages
+    
+    def _clean_common_confirmations(self, message: str) -> str:
+        """Remove confirmações corriqueiras e palavras desnecessárias"""
+        
+        # Padrões de confirmações corriqueiras para remover
+        patterns_to_remove = [
+            r'Perfeito!\s*',
+            r'Excelente!\s*', 
+            r'Ótimo!\s*',
+            r'Entendi[,.]?\s*',
+            r'Certo[,.]?\s*',
+            r'Tudo bem[,.]?\s*',
+            r'Obrigad[ao] pela informação[,.]?\s*',
+            r'Vou te passar\s*',
+            r'Deixe-me\s*',
+            r'Vamos\s+verificar\s*',
+            r'perfeitamente!\s*',
+        ]
+        
+        cleaned = message
+        for pattern in patterns_to_remove:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+        
+        # Remove espaços extras e caracteres órfãos
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        cleaned = re.sub(r'^[,.\s]+', '', cleaned)  # Remove pontuação no início
         
         return cleaned
+    
+    def _is_question(self, sentence: str) -> bool:
+        """Identifica se uma sentença é uma pergunta"""
+        
+        # Se termina com ? é pergunta
+        if sentence.strip().endswith('?'):
+            return True
+        
+        # Palavras que indicam pergunta
+        question_words = [
+            'como', 'quando', 'onde', 'qual', 'quais', 'quanto', 'quantos', 'quantas',
+            'você', 'vocês', 'gostaria', 'gostam', 'pretende', 'pretendem', 
+            'tem ', 'têm', 'possui', 'possuem', 'aceita', 'aceitam',
+            'quer', 'querem', 'deseja', 'desejam', 'pode', 'podem',
+            'seria', 'teria', 'haveria', 'estaria', 'gostaria'
+        ]
+        
+        sentence_lower = sentence.lower()
+        
+        # Se contém palavras de pergunta no início ou meio da frase
+        return any(
+            sentence_lower.startswith(word + ' ') or 
+            ' ' + word + ' ' in sentence_lower or
+            sentence_lower.startswith(word + ',') or
+            ' ' + word + ',' in sentence_lower
+            for word in question_words
+        )
+    
+    def _finalize_message(self, sentences: list) -> str:
+        """Finaliza uma mensagem juntando as sentenças"""
+        
+        if not sentences:
+            return ""
+            
+        # Junta sentenças
+        message = ' '.join(sentences)
+        
+        # Adiciona pontuação final se necessário
+        if not re.search(r'[.!?]$', message.strip()):
+            if self._is_question(message):
+                message += '?'
+            else:
+                message += '.'
+        
+        return message.strip()
 
     def set_instance(self, instance: str, instance_key: str) -> None:
         self._instance_id = instance
