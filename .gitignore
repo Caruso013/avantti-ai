@@ -56,5 +56,18 @@ test_*.py
 teste_*.py
 *_teste.py
 app_test.py
+demo_*.py
+*_demo.py
+
+# Guias e documentação específica
+GUIA_*.md
+DEPLOY_*.md
+CONFIGURACAO_*.md
+TROUBLESHOOTING_*.md
+EXEMPLOS_*.md
+CHANGELOG_*.md
+REVISAO_*.md
+SUPABASE_*.md
+VERSION.md
 
 # credentials/
