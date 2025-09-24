@@ -125,37 +125,37 @@ class NotificarNovoLeadTool(ITool):
         
         try:
             # Monta mensagem de notificação
-            status_emoji = "✅" if c2s_result.get("success") else "⚠️"
+            status_emoji = "OK" if c2s_result.get("success") else "AVISO"
             action_text = {
-                "created": "🆕 NOVO LEAD",
-                "updated": "🔄 LEAD ATUALIZADO", 
-                "unknown": "📋 LEAD PROCESSADO"
-            }.get(c2s_result.get("action", "unknown"), "📋 LEAD PROCESSADO")
+                "created": "NOVO LEAD",
+                "updated": "LEAD ATUALIZADO", 
+                "unknown": "LEAD PROCESSADO"
+            }.get(c2s_result.get("action", "unknown"), "LEAD PROCESSADO")
             
             message_parts = [
                 f"{status_emoji} {action_text}",
                 "",
-                f"👤 Nome: {lead_info.name}",
-                f"📱 Telefone: {lead_info.phone}",
+                f"Nome: {lead_info.name}",
+                f"Telefone: {lead_info.phone}",
             ]
             
             if lead_info.interest:
-                message_parts.append(f"🎯 Interesse: {lead_info.interest}")
+                message_parts.append(f"Interesse: {lead_info.interest}")
             
             if lead_info.budget:
-                message_parts.append(f"💰 Orçamento: {lead_info.budget}")
+                message_parts.append(f"Orçamento: {lead_info.budget}")
             
             if lead_info.message:
-                message_parts.append(f"💬 Mensagem: {lead_info.message}")
+                message_parts.append(f"Mensagem: {lead_info.message}")
             
             # Status da integração
             message_parts.extend([
                 "",
-                f"🔗 Contact2Sale: {c2s_result.get('message', 'N/A')}"
+                f"Contact2Sale: {c2s_result.get('message', 'N/A')}"
             ])
             
             if c2s_result.get("lead_id"):
-                message_parts.append(f"🆔 ID Lead: {c2s_result['lead_id']}")
+                message_parts.append(f"ID Lead: {c2s_result['lead_id']}")
             
             notification_message = "\n".join(message_parts)
             
