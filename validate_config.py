@@ -52,8 +52,8 @@ class ConfigValidator:
         
         zapi_configured = all([
             os.getenv('ZAPI_BASE_URL'),
-            os.getenv('ZAPI_INSTANCE_ID'),
-            os.getenv('ZAPI_INSTANCE_TOKEN'),
+            os.getenv('ZAPI_INSTANCE'),
+            os.getenv('ZAPI_TOKEN'),
             os.getenv('ZAPI_CLIENT_TOKEN')
         ])
         

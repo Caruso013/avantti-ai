@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 class ZAPIService:
     def __init__(self):
-        # Usando as variáveis corretas que funcionam no teste
+        # Usando as variáveis CORRETAS que estão no .env
         self.base_url = os.getenv('ZAPI_BASE_URL', 'https://api.z-api.io')
-        self.instance_id = os.getenv('ZAPI_INSTANCE_ID')
-        self.instance_token = os.getenv('ZAPI_INSTANCE_TOKEN') 
+        self.instance_id = os.getenv('ZAPI_INSTANCE')  # CORRIGIDO
+        self.instance_token = os.getenv('ZAPI_TOKEN')   # CORRIGIDO
         self.client_token = os.getenv('ZAPI_CLIENT_TOKEN')
         
         # URL completa como no cliente que funciona

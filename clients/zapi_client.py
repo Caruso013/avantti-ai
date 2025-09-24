@@ -10,8 +10,8 @@ from interfaces.clients.chat_interface import IChat
 class ZAPIClient(IChat):
     def __init__(self):
         self._base_url = os.getenv("ZAPI_BASE_URL")
-        self._instance_id = os.getenv("ZAPI_INSTANCE_ID")
-        self._instance_token = os.getenv("ZAPI_INSTANCE_TOKEN")
+        self._instance_id = os.getenv("ZAPI_INSTANCE")      # CORRIGIDO
+        self._instance_token = os.getenv("ZAPI_TOKEN")      # CORRIGIDO
         self._client_token = os.getenv("ZAPI_CLIENT_TOKEN")
         self._headers = {"Content-Type": "application/json"}
 
