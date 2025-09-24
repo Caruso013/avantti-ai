@@ -10,7 +10,7 @@ if root_dir not in sys.path:
 
 from src.services.openai_service import OpenAIService
 from src.services.supabase_service import SupabaseService
-from src.services.zapi_service import ZAPIService
+from clients.zapi_client import ZAPIClient  # CORRIGIDO - usar o cliente que funciona
 from src.services.whisper_service import WhisperService
 from src.services.lead_data_service import LeadDataService
 
@@ -20,7 +20,7 @@ class MessageHandler:
     def __init__(self):
         self.openai_service = OpenAIService()
         self.supabase_service = SupabaseService()
-        self.zapi_service = ZAPIService()
+        self.zapi_client = ZAPIClient()  # CORRIGIDO - usar cliente que funciona
         self.whisper_service = WhisperService()
         self.lead_data_service = LeadDataService()
     
@@ -50,20 +50,20 @@ class MessageHandler:
                 message, phone, context, lead_data
             )
             
-            # Salva mensagem recebida
+            # Salva mensagem recebida (sem emojis)
             self.supabase_service.salvar_mensagem(
-                phone, message, 'user'
+                phone, self._remover_emojis(message), 'user'
             )
             
-            # Salva respostas da IA
+            # Salva respostas da IA (sem emojis)
             for msg in mensagens_resposta:
                 self.supabase_service.salvar_mensagem(
-                    phone, msg, 'assistant'
+                    phone, self._remover_emojis(msg), 'assistant'
                 )
             
-            # Envia resposta com efeito natural (delay de 10s + typing)
+            # Envia resposta usando ZAPIClient com delay
             thread = threading.Thread(
-                target=self.zapi_service.enviar_resposta_com_efeito_natural,
+                target=self._enviar_mensagens_com_delay,
                 args=(phone, mensagens_resposta)
             )
             thread.daemon = True
@@ -103,7 +103,7 @@ class MessageHandler:
                 mensagem_erro = ["Desculpe, não consegui entender o áudio. Pode escrever sua mensagem?"]
                 
                 thread = threading.Thread(
-                    target=self.zapi_service.enviar_resposta_com_efeito_natural,
+                    target=self._enviar_mensagens_com_delay,
                     args=(phone, mensagem_erro)
                 )
                 thread.daemon = True
@@ -121,3 +121,59 @@ class MessageHandler:
         except Exception as e:
             logger.error(f"Erro ao atualizar prompt: {e}")
             return False
+    
+    def _enviar_mensagens_com_delay(self, phone, mensagens):
+        """Envia mensagens com delay de 10s usando ZAPIClient"""
+        try:
+            import time
+            
+            # Delay inicial de 10 segundos
+            time.sleep(10)
+            
+            # Envia cada mensagem (ZAPIClient já quebra e filtra emojis automaticamente)
+            for mensagem in mensagens:
+                # Remove emojis manualmente também por garantia
+                mensagem_limpa = self._remover_emojis(mensagem)
+                self.zapi_client.send_message(phone, mensagem_limpa)
+                
+        except Exception as e:
+            logger.error(f"Erro ao enviar mensagens com delay: {e}")
+    
+    def _remover_emojis(self, texto):
+        """Remove emojis do texto usando uma abordagem mais robusta"""
+        import re
+        
+        # Remove emojis usando múltiplos padrões
+        # Padrão 1: Emojis padrão
+        texto = re.sub(r'[\U0001F600-\U0001F64F]', '', texto)  # emoticons
+        texto = re.sub(r'[\U0001F300-\U0001F5FF]', '', texto)  # symbols & pictographs
+        texto = re.sub(r'[\U0001F680-\U0001F6FF]', '', texto)  # transport & map symbols
+        texto = re.sub(r'[\U0001F1E0-\U0001F1FF]', '', texto)  # flags (iOS)
+        texto = re.sub(r'[\U00002702-\U000027B0]', '', texto)
+        texto = re.sub(r'[\U000024C2-\U0001F251]', '', texto)
+        texto = re.sub(r'[\U0001F900-\U0001F9FF]', '', texto)  # Supplemental Symbols and Pictographs
+        texto = re.sub(r'[\U0001FA70-\U0001FAFF]', '', texto)  # Symbols and Pictographs Extended-A
+        
+        # Padrão 2: Remove símbolos específicos que podem passar
+        symbols_to_remove = ['😊', '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊', 
+                            '😋', '😎', '😍', '😘', '🥰', '😗', '😙', '😚', '🤪', '😜', '😝',
+                            '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏',
+                            '😒', '🙄', '😬', '🤥', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕',
+                            '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎',
+                            '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦',
+                            '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓',
+                            '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️',
+                            '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '🎃', '😺', '😸',
+                            '🏢', '💰', '📍', '📞', '📌', '❌', '✅', '⚠️', '📝', '💬', '🚀',
+                            '🎯', '🔥', '👨‍💻', '🏡', '💪', '🙌', '👏', '🎉', '💸', '💵', '💴',
+                            '📈', '📊', '🏠', '🏗️', '🌟', '⭐', '💯', '👍', '👎', '❤️', '💙',
+                            '💚', '🎁', '🎊', '🔔', '🔕', '📢', '📣', '📺', '📻', '📷', '📹',
+                            '🎵', '🎶', '🟢', '🟡', '🔴', '🟠', '⚡', '💡', '🔒', '🔓', '🔑',
+                            '🔐', '👥', '🔄', '▶️', '🧪', '🧹', '📱', '🤖']
+        
+        for symbol in symbols_to_remove:
+            texto = texto.replace(symbol, '')
+        
+        # Remove espaços extras e limpa
+        texto = re.sub(r'\s+', ' ', texto).strip()
+        return texto
