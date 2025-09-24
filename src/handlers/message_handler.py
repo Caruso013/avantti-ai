@@ -12,22 +12,7 @@ from src.services.openai_service import OpenAIService
 from src.services.supabase_service import SupabaseService
 from src.services.whisper_service import WhisperService
 from src.services.lead_data_service import LeadDataService
-
-# Import ZAPIClient with multiple fallback strategies for different environments
-try:
-    # Method 1: Direct import from clients package
-    from clients.zapi_client import ZAPIClient
-except ImportError:
-    try:
-        # Method 2: Import via sys.path manipulation
-        clients_path = os.path.join(root_dir, 'clients')
-        if clients_path not in sys.path:
-            sys.path.insert(0, clients_path)
-        from zapi_client import ZAPIClient
-    except ImportError:
-        # Method 3: Import from clients package directly
-        import clients
-        ZAPIClient = clients.ZAPIClient
+from src.services.zapi_client_service import ZAPIClientService
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +20,7 @@ class MessageHandler:
     def __init__(self):
         self.openai_service = OpenAIService()
         self.supabase_service = SupabaseService()
-        self.zapi_client = ZAPIClient()  # CORRIGIDO - usar cliente que funciona
+        self.zapi_client = ZAPIClientService()  # CORRIGIDO - usar service interno
         self.whisper_service = WhisperService()
         self.lead_data_service = LeadDataService()
     
