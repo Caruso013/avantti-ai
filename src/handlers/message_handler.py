@@ -10,9 +10,24 @@ if root_dir not in sys.path:
 
 from src.services.openai_service import OpenAIService
 from src.services.supabase_service import SupabaseService
-from clients.zapi_client import ZAPIClient  # CORRIGIDO - usar o cliente que funciona
 from src.services.whisper_service import WhisperService
 from src.services.lead_data_service import LeadDataService
+
+# Import ZAPIClient with multiple fallback strategies for different environments
+try:
+    # Method 1: Direct import from clients package
+    from clients.zapi_client import ZAPIClient
+except ImportError:
+    try:
+        # Method 2: Import via sys.path manipulation
+        clients_path = os.path.join(root_dir, 'clients')
+        if clients_path not in sys.path:
+            sys.path.insert(0, clients_path)
+        from zapi_client import ZAPIClient
+    except ImportError:
+        # Method 3: Import from clients package directly
+        import clients
+        ZAPIClient = clients.ZAPIClient
 
 logger = logging.getLogger(__name__)
 
