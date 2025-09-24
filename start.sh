@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script de inicialização para EasyPanel
 
-echo "🚀 Iniciando Avantti AI - Eliane V3..."
+echo "🚀 Iniciando Avantti AI - Eliane V4..."
 
 # Define PYTHONPATH para incluir o diretório atual
 export PYTHONPATH="${PYTHONPATH}:/app"

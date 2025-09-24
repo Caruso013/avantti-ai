@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 import logging
 
 # Versão da aplicação
-AVANTTI_VERSION = "3.0.0"
-AVANTTI_CODENAME = "Contact2Sale Distribution"
+AVANTTI_VERSION = "4.0.0"
+AVANTTI_CODENAME = "AI Enhanced Lead Processing"
 
 # Adiciona o diretório atual ao PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -39,7 +39,7 @@ if not config_manager.validate_config():
     logger.error("Configuracoes invalidas. Verifique as variaveis de ambiente.")
     exit(1)
 
-print("=== AVANTTI AI - ELIANE V3 MODULAR ===")
+print("=== AVANTTI AI - ELIANE V4 MODULAR ===")
 
 # Sistema de filas melhorado
 message_queues = {}
@@ -232,7 +232,7 @@ def metrics_endpoint():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "healthy", "service": "avantti-ai-eliane-v3"}), 200
+    return jsonify({"status": "healthy", "service": "avantti-ai-eliane-v4"}), 200
 
 @app.route("/version", methods=["GET"])
 def version():
