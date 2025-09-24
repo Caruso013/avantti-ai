@@ -48,7 +48,7 @@ async def run_queue_worker():
 
         except Exception as e:
             logger.exception(
-                f"[QUEUE WORKER] ❌ Erro ao executar o queue worker: \n{to_json_dump(e)}"
+                f"[QUEUE WORKER] ERRO - Erro ao executar o queue worker: \n{to_json_dump(e)}"
             )
             raise e
 

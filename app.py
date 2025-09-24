@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 import logging
 
 # Versão da aplicação
-AVANTTI_VERSION = "4.0.0"
-AVANTTI_CODENAME = "AI Enhanced Lead Processing"
+AVANTTI_VERSION = "4.0.1"
+AVANTTI_CODENAME = "Clean Interface & 10s Response"
 
 # Adiciona o diretório atual ao PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -408,18 +408,18 @@ def print_startup_banner():
     """Exibe banner de inicialização com informações da versão"""
     banner = f"""
     ╔══════════════════════════════════════════════════════════════╗
-    ║                🤖 AVANTTI AI v{AVANTTI_VERSION}                      ║
+    ║                AVANTTI AI v{AVANTTI_VERSION}                         ║
     ║              {AVANTTI_CODENAME:<25}               ║
     ║                    Sistema Evex Imóveis                      ║
     ╠══════════════════════════════════════════════════════════════╣
-    ║  ✅ NOVIDADES DESTA VERSÃO:                                  ║
-    ║  🔄 Distribuição automática entre 11 equipes                ║
-    ║  📱 Mensagens quebradas em WhatsApp                         ║
-    ║  🎯 Integração Contact2Sale completa                        ║
-    ║  📊 Sistema de estatísticas de leads                        ║
-    ║  🚫 Remoção de agendamento de visitas                       ║
+    ║  NOVIDADES DESTA VERSÃO:                                     ║
+    ║  - Distribuição automática entre 11 equipes                 ║
+    ║  - Mensagens quebradas em WhatsApp                          ║
+    ║  - Integração Contact2Sale completa                         ║
+    ║  - Sistema de estatísticas de leads                         ║
+    ║  - Remoção de agendamento de visitas                        ║
     ╠══════════════════════════════════════════════════════════════╣
-    ║  📋 CONFIGURAÇÕES ATIVAS:                                   ║"""
+    ║  CONFIGURAÇÕES ATIVAS:                                      ║"""
     
     # Verifica configurações
     config_lines = []
@@ -430,60 +430,60 @@ def print_startup_banner():
     distribution_method = os.getenv("C2S_DISTRIBUTION_METHOD", "round_robin")
     
     if c2s_enabled:
-        config_lines.append("    ║  🟢 Contact2Sale: ATIVO                                     ║")
+        config_lines.append("    ║  Contact2Sale: ATIVO                                        ║")
         if distribution_enabled:
-            config_lines.append(f"    ║  🔄 Distribuição: {distribution_method.upper():<15}                   ║")
+            config_lines.append(f"    ║  Distribuição: {distribution_method.upper():<15}                      ║")
             
             # Conta equipes ativas
             try:
                 from services.lead_distributor_service import LeadDistributor
                 distributor = LeadDistributor()
                 active_teams = len(distributor.get_active_teams())
-                config_lines.append(f"    ║  👥 Equipes ativas: {active_teams:<2}                                   ║")
+                config_lines.append(f"    ║  Equipes ativas: {active_teams:<2}                                      ║")
             except:
-                config_lines.append("    ║  👥 Equipes ativas: 11                                      ║")
+                config_lines.append("    ║  Equipes ativas: 11                                         ║")
         else:
-            config_lines.append("    ║  🔄 Distribuição: DESABILITADA                             ║")
+            config_lines.append("    ║  Distribuição: DESABILITADA                                ║")
     else:
-        config_lines.append("    ║  🔴 Contact2Sale: DESABILITADO                             ║")
+        config_lines.append("    ║  Contact2Sale: DESABILITADO                                ║")
     
     # WhatsApp API
     whatsapp_api = os.getenv("WHATSAPP_API", "evolution").upper()
-    config_lines.append(f"    ║  📱 WhatsApp API: {whatsapp_api:<15}                        ║")
+    config_lines.append(f"    ║  WhatsApp API: {whatsapp_api:<15}                           ║")
     
     # Outros serviços
     redis_enabled = bool(os.getenv("REDIS_URL"))
     supabase_enabled = bool(os.getenv("SUPABASE_URL"))
     openai_enabled = bool(os.getenv("OPENAI_API_KEY"))
     
-    config_lines.append(f"    ║  🔴 Redis: {'ATIVO' if redis_enabled else 'INATIVO':<15}                        ║")
-    config_lines.append(f"    ║  🟢 Supabase: {'ATIVO' if supabase_enabled else 'INATIVO':<15}                     ║")
-    config_lines.append(f"    ║  🟢 OpenAI: {'ATIVO' if openai_enabled else 'INATIVO':<15}                       ║")
+    config_lines.append(f"    ║  Redis: {'ATIVO' if redis_enabled else 'INATIVO':<15}                           ║")
+    config_lines.append(f"    ║  Supabase: {'ATIVO' if supabase_enabled else 'INATIVO':<15}                       ║")
+    config_lines.append(f"    ║  OpenAI: {'ATIVO' if openai_enabled else 'INATIVO':<15}                         ║")
     
     config_lines.append("    ╠══════════════════════════════════════════════════════════════╣")
-    config_lines.append(f"    ║  🚀 Servidor na porta: {os.getenv('PORT', 5000):<5}                              ║")
-    config_lines.append(f"    ║  📅 Iniciado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S'):<15}                ║")
+    config_lines.append(f"    ║  Servidor na porta: {os.getenv('PORT', 5000):<5}                                ║")
+    config_lines.append(f"    ║  Iniciado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S'):<15}                  ║")
     config_lines.append("    ╚══════════════════════════════════════════════════════════════╝")
     
     full_banner = banner + "\n" + "\n".join(config_lines)
     
     print(full_banner)
-    logger.info(f"🚀 Avantti AI v{AVANTTI_VERSION} ({AVANTTI_CODENAME}) iniciado com sucesso!")
+    logger.info(f"Avantti AI v{AVANTTI_VERSION} ({AVANTTI_CODENAME}) iniciado com sucesso!")
     
     if c2s_enabled and distribution_enabled:
-        logger.info("✅ Sistema de distribuição de leads Contact2Sale ATIVO")
-        logger.info(f"📊 Método de distribuição: {distribution_method}")
+        logger.info("Sistema de distribuição de leads Contact2Sale ATIVO")
+        logger.info(f"Método de distribuição: {distribution_method}")
     elif c2s_enabled:
-        logger.info("✅ Contact2Sale ativo (distribuição desabilitada)")
+        logger.info("Contact2Sale ativo (distribuição desabilitada)")
     else:
-        logger.warning("⚠️ Contact2Sale DESABILITADO")
+        logger.warning("Contact2Sale DESABILITADO")
     
     # Log adicional para EasyPanel
     logger.info("=" * 60)
-    logger.info(f"🌟 NOVA VERSÃO ATIVA: v{AVANTTI_VERSION}")
-    logger.info("🏢 Cliente: Evex Imóveis")
-    logger.info("🔄 Distribuição automática de leads implementada")
-    logger.info("📱 Mensagens otimizadas para WhatsApp")
+    logger.info(f"NOVA VERSÃO ATIVA: v{AVANTTI_VERSION}")
+    logger.info("Cliente: Evex Imóveis")
+    logger.info("Distribuição automática de leads implementada")
+    logger.info("Mensagens otimizadas para WhatsApp")
     logger.info("=" * 60)
     
     return full_banner

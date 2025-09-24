@@ -21,7 +21,7 @@ class ZAPIClient(IChat):
 
         # Verifica se a mensagem não está vazia
         if not message_clean:
-            print("❌ Dados incompletos: A mensagem é obrigatória.")
+            print("ERRO - Dados incompletos: A mensagem é obrigatória.")
             return False
 
         return True
@@ -30,7 +30,7 @@ class ZAPIClient(IChat):
         # Verifica se o celular não está vazio
         if not cell_number:
             logger.info(
-                f"[Z-API] ❌ Dados incompletos: O número de telefone é obrigatório. {cell_number}"
+                f"[Z-API] ERRO - Dados incompletos: O número de telefone é obrigatório. {cell_number}"
             )
             return False
 
@@ -87,6 +87,9 @@ class ZAPIClient(IChat):
         
         # Agrupa sentenças em mensagens inteligentes
         messages = self._group_sentences_smartly(sentences)
+        
+        # Remove emojis de todas as mensagens
+        messages = [self._remove_emojis(msg) for msg in messages]
         
         return [msg for msg in messages if msg.strip()]
     
@@ -186,6 +189,27 @@ class ZAPIClient(IChat):
         # Remove espaços extras e caracteres órfãos
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         cleaned = re.sub(r'^[,.\s]+', '', cleaned)  # Remove pontuação no início
+        
+        return cleaned
+    
+    def _remove_emojis(self, message: str) -> str:
+        """Remove todos os emojis da mensagem"""
+        
+        # Padrão para detectar e remover emojis
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # emoticons
+            "\U0001F300-\U0001F5FF"  # symbols & pictographs
+            "\U0001F680-\U0001F6FF"  # transport & map symbols
+            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+            "\U00002702-\U000027B0"
+            "\U000024C2-\U0001F251"
+            "😊🏢💰📍📞📌❌✅🤖⚠️📝💬🚀🎯🔥👨‍💻🏡💪🙌👏🎉💸💵💴📈📊🏠🏗️🌟⭐💯👍👎❤️💙💚🎁🎊🔔🔕📢📣📺📻📷📹🎵🎶🟢🟡🔴🟠⚡💡🔒🔓🔑🔐👥🔄"
+            "]+", flags=re.UNICODE)
+        
+        # Remove emojis e limpa espaços extras
+        cleaned = emoji_pattern.sub('', message)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         
         return cleaned
     
@@ -342,7 +366,7 @@ class ZAPIClient(IChat):
             return True
         except Exception as e:
             logger.exception(
-                f"[Z-API] ❌ Falha ao enviar mensagem: \n{to_json_dump(e)}"
+                f"[Z-API] ERRO - Falha ao enviar mensagem: \n{to_json_dump(e)}"
             )
             raise e
 
@@ -351,9 +375,12 @@ class ZAPIClient(IChat):
 
         headers = {**self._headers, "Client-Token": self._client_token}
 
+        # Remove emojis da mensagem dos botões
+        clean_message = self._remove_emojis(message)
+
         payload = {
             "phone": self._resolve_phone(phone),
-            "message": message,
+            "message": clean_message,
             "buttonList": {
                 "buttons": buttons,
             },
@@ -374,6 +401,6 @@ class ZAPIClient(IChat):
 
         except Exception as e:
             logger.exception(
-                f"[Z-API] ❌ Falha ao enviar lista de botões: \n{to_json_dump(e)}"
+                f"[Z-API] ERRO - Falha ao enviar lista de botões: \n{to_json_dump(e)}"
             )
             raise e

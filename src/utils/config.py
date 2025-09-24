@@ -58,7 +58,7 @@ class ConfigManager:
         # Configurações opcionais
         optional_configs = {
             'LOG_LEVEL': os.getenv('LOG_LEVEL', 'INFO'),
-            'DELAY_RESPOSTA': os.getenv('DELAY_RESPOSTA', '15'),
+            'DELAY_RESPOSTA': os.getenv('DELAY_RESPOSTA', '10'),
             'DELAY_ENTRE_MENSAGENS': os.getenv('DELAY_ENTRE_MENSAGENS', '3')
         }
         

@@ -61,7 +61,7 @@ class MessageHandler:
                     phone, msg, 'assistant'
                 )
             
-            # Envia resposta com efeito natural (delay de 15s + typing)
+            # Envia resposta com efeito natural (delay de 10s + typing)
             thread = threading.Thread(
                 target=self.zapi_service.enviar_resposta_com_efeito_natural,
                 args=(phone, mensagens_resposta)

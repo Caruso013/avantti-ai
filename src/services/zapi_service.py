@@ -151,17 +151,17 @@ class ZAPIService:
             logger.error(f"Erro ao enviar mensagens com delay: {e}")
             return False
     
-    def enviar_resposta_com_efeito_natural(self, phone, mensagens: List[str], delay_inicial=15):
+    def enviar_resposta_com_efeito_natural(self, phone, mensagens: List[str], delay_inicial=10):
         """
-        Envia resposta com delay inicial de 15s e efeitos naturais
+        Envia resposta com delay inicial de 10s e efeitos naturais
         
         Args:
             phone: Número do telefone  
             mensagens: Lista de mensagens para enviar
-            delay_inicial: Delay antes da primeira mensagem (padrão 15s)
+            delay_inicial: Delay antes da primeira mensagem (padrão 10s)
         """
         try:
-            # Delay inicial de 15 segundos
+            # Delay inicial de 10 segundos
             logger.info(f"Aguardando {delay_inicial}s antes de responder...")
             time.sleep(delay_inicial)
             
