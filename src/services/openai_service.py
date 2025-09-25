@@ -270,42 +270,50 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
         return mensagens
     
     def gerar_resposta(self, message, phone, context=None, lead_data=None):
-        """Gera resposta da IA com novo prompt e variáveis dinâmicas"""
+        """Gera resposta da IA usando GPT-4o-mini configurado para o assistant asst_C4tLHrq74kxj8NUHEUkieU65"""
         try:
             # Aplica variáveis dinâmicas no prompt
             prompt_personalizado = self._aplicar_variaveis_prompt(self.system_prompt, lead_data)
+
+            # Payload para usar a API de chat completions com GPT-4o-mini
+            messages = [
+                {"role": "system", "content": prompt_personalizado},
+                {"role": "user", "content": message}
+            ]
             
-            messages = [{"role": "system", "content": prompt_personalizado}]
-            
+            # Se houver contexto, adiciona mensagens anteriores
             if context:
-                messages.extend(context)
-            
-            messages.append({"role": "user", "content": message})
-            
+                # Adiciona contexto antes da mensagem atual
+                for ctx in context[-5:]:  # Últimas 5 mensagens
+                    role = "user" if ctx.get('sender') == 'user' else "assistant"
+                    messages.insert(-1, {"role": role, "content": ctx.get('message', '')})
+
             data = {
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",  # Modelo configurado para o assistant
                 "messages": messages,
                 "max_tokens": 200,
                 "temperature": 0.7
             }
-            
+
             response = requests.post(
                 'https://api.openai.com/v1/chat/completions',
                 headers=self.headers,
                 json=data,
                 timeout=15
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
-                texto_resposta = result['choices'][0]['message']['content'].strip()
+                texto_resposta = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                 
-                # Quebra em múltiplas mensagens
-                mensagens = self._quebrar_em_mensagens(texto_resposta)
-                logger.info(f"Resposta gerada e quebrada em {len(mensagens)} mensagens")
-                return mensagens
+                if texto_resposta:
+                    mensagens = self._quebrar_em_mensagens(texto_resposta)
+                    logger.info(f"Resposta gerada com GPT-4o-mini e quebrada em {len(mensagens)} mensagens")
+                    return mensagens
+                else:
+                    return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
             else:
-                logger.error(f"Erro OpenAI: {response.status_code}")
+                logger.error(f"Erro OpenAI API: {response.status_code} - {response.text}")
                 return ["Desculpe, ocorreu um erro. Tente novamente."]
         except Exception as e:
             logger.error(f"Erro na geração de resposta: {e}")
