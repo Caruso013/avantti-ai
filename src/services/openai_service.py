@@ -272,8 +272,15 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
     def gerar_resposta(self, message, phone, context=None, lead_data=None):
         """Gera resposta da IA usando GPT-4o-mini configurado para o assistant asst_C4tLHrq74kxj8NUHEUkieU65"""
         try:
+            # Verifica se é a primeira interação (sem contexto ou contexto vazio)
+            is_primeira_mensagem = not context or len(context) == 0
+            
             # Aplica variáveis dinâmicas no prompt
             prompt_personalizado = self._aplicar_variaveis_prompt(self.system_prompt, lead_data)
+            
+            # Se é a primeira mensagem, reforça a instrução de apresentação
+            if is_primeira_mensagem:
+                prompt_personalizado += "\n\nIMPORTANTE: Esta é a PRIMEIRA mensagem para este lead. OBRIGATORIAMENTE se apresente como Eliane da Evex Imóveis conforme as instruções de apresentação inicial."
 
             # Payload para usar a API de chat completions com GPT-4o-mini
             messages = [
@@ -291,7 +298,7 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
             data = {
                 "model": "gpt-4o-mini",  # Modelo configurado para o assistant
                 "messages": messages,
-                "max_tokens": 200,
+                "max_tokens": 300,  # Aumentado para acomodar JSON
                 "temperature": 0.7
             }
 
@@ -307,9 +314,18 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                 texto_resposta = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                 
                 if texto_resposta:
-                    mensagens = self._quebrar_em_mensagens(texto_resposta)
-                    logger.info(f"Resposta gerada com GPT-4o-mini e quebrada em {len(mensagens)} mensagens")
-                    return mensagens
+                    # Tenta extrair JSON da resposta
+                    resposta_final = self._extrair_reply_do_json(texto_resposta)
+                    
+                    if resposta_final:
+                        mensagens = self._quebrar_em_mensagens(resposta_final)
+                        logger.info(f"Resposta extraída do JSON e quebrada em {len(mensagens)} mensagens")
+                        return mensagens
+                    else:
+                        # Se não conseguir extrair JSON, usa a resposta direta
+                        mensagens = self._quebrar_em_mensagens(texto_resposta)
+                        logger.info(f"Resposta direta quebrada em {len(mensagens)} mensagens")
+                        return mensagens
                 else:
                     return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
             else:
@@ -318,3 +334,59 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
         except Exception as e:
             logger.error(f"Erro na geração de resposta: {e}")
             return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
+    
+    def _extrair_reply_do_json(self, texto_resposta):
+        """Extrai o campo 'reply' do JSON retornado pela IA"""
+        try:
+            import json
+            
+            # Remove quebras de linha e espaços extras
+            texto_limpo = re.sub(r'\s+', ' ', texto_resposta.strip())
+            
+            # Tenta encontrar JSON na resposta
+            # Procura por padrões de JSON que começam com {
+            start_pos = texto_limpo.find('{ "reply"')
+            if start_pos == -1:
+                start_pos = texto_limpo.find('{"reply"')
+            
+            if start_pos != -1:
+                # Encontra o final do JSON balanceando chaves
+                bracket_count = 0
+                end_pos = start_pos
+                
+                for i, char in enumerate(texto_limpo[start_pos:], start_pos):
+                    if char == '{':
+                        bracket_count += 1
+                    elif char == '}':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            end_pos = i + 1
+                            break
+                
+                json_text = texto_limpo[start_pos:end_pos]
+                
+                # Tenta fazer parse do JSON
+                try:
+                    json_obj = json.loads(json_text)
+                    reply = json_obj.get('reply', '').strip()
+                    
+                    if reply:
+                        logger.info(f"JSON extraído com sucesso: {reply[:50]}...")
+                        return reply
+                        
+                except json.JSONDecodeError as je:
+                    logger.warning(f"Erro ao fazer parse do JSON: {je}")
+                    
+            # Se não conseguiu extrair JSON, tenta extrair apenas o reply
+            reply_match = re.search(r'"reply":\s*"([^"]+)"', texto_resposta)
+            if reply_match:
+                reply = reply_match.group(1).strip()
+                logger.info(f"Reply extraído via regex: {reply[:50]}...")
+                return reply
+            
+            logger.warning("Não foi possível extrair reply do JSON")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro ao extrair reply do JSON: {e}")
+            return None
