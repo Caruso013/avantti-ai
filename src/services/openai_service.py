@@ -186,8 +186,9 @@ Lead é qualificado se:
 - **INDEFINIDO** → antes de obter respostas-chave
 
 # 10. Formato de Saída
-Sempre responder em JSON único (uma linha), conforme:
+ATENÇÃO: RETORNE APENAS O TEXTO DA MENSAGEM, NÃO RETORNE JSON!
 
+Se você quiser incluir dados estruturados, use o seguinte formato JSON interno:
 {
   "reply": "Mensagem curta ao lead (máx 180 caracteres, formal-casual, clara, empática, com quebras de texto naturais, CONTEXTUAL)",
   "c2s": {
@@ -200,6 +201,7 @@ Sempre responder em JSON único (uma linha), conforme:
 }
 }
 
+IMPORTANTE: O cliente receberá APENAS o conteúdo do campo "reply". NUNCA envie o JSON completo.
 Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 180 caracteres cada)."""
     
     def update_prompt(self, new_prompt):
@@ -314,17 +316,31 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                 texto_resposta = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                 
                 if texto_resposta:
-                    # Tenta extrair JSON da resposta
-                    resposta_final = self._extrair_reply_do_json(texto_resposta)
-                    
-                    if resposta_final:
-                        mensagens = self._quebrar_em_mensagens(resposta_final)
-                        logger.info(f"Resposta extraída do JSON e quebrada em {len(mensagens)} mensagens")
-                        return mensagens
+                    # VERIFICAÇÃO CRÍTICA: Se contém JSON, extrai OBRIGATORIAMENTE
+                    if '{ "reply"' in texto_resposta or '{"reply"' in texto_resposta:
+                        logger.info("JSON detectado na resposta - extraindo reply...")
+                        resposta_final = self._extrair_reply_do_json(texto_resposta)
+                        
+                        if resposta_final:
+                            mensagens = self._quebrar_em_mensagens(resposta_final)
+                            logger.info(f"✅ JSON extraído com sucesso: {resposta_final[:50]}...")
+                            return mensagens
+                        else:
+                            # FALLBACK CRÍTICO: Tenta regex mais agressivo
+                            logger.warning("Extração JSON falhou - tentando regex alternativo...")
+                            fallback_reply = self._extrair_reply_fallback(texto_resposta)
+                            if fallback_reply:
+                                mensagens = self._quebrar_em_mensagens(fallback_reply)
+                                logger.info(f"✅ Fallback extraído: {fallback_reply[:50]}...")
+                                return mensagens
+                            else:
+                                # ÚLTIMO RECURSO: Resposta padrão
+                                logger.error("❌ FALHA CRÍTICA: Não conseguiu extrair reply do JSON!")
+                                return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
                     else:
-                        # Se não conseguir extrair JSON, usa a resposta direta
+                        # Resposta já está limpa (sem JSON)
                         mensagens = self._quebrar_em_mensagens(texto_resposta)
-                        logger.info(f"Resposta direta quebrada em {len(mensagens)} mensagens")
+                        logger.info(f"Resposta direta (sem JSON) quebrada em {len(mensagens)} mensagens")
                         return mensagens
                 else:
                     return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
@@ -389,4 +405,44 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
             
         except Exception as e:
             logger.error(f"Erro ao extrair reply do JSON: {e}")
+            return None
+    
+    def _extrair_reply_fallback(self, texto_resposta):
+        """Fallback mais agressivo para extrair reply quando o JSON está malformado"""
+        try:
+            import re
+            
+            # Múltiplas tentativas de extração
+            padroes = [
+                r'"reply":\s*"([^"]+)"',  # Padrão básico
+                r'"reply"\s*:\s*"([^"]+)"',  # Com espaços extras
+                r'reply":\s*"([^"]+)"',  # Sem aspas inicial
+                r'"reply":\s*\'([^\']+)\'',  # Com aspas simples
+                r'"reply":\s*"([^"]*)"',  # Aceita string vazia
+            ]
+            
+            for padrao in padroes:
+                match = re.search(padrao, texto_resposta, re.IGNORECASE)
+                if match:
+                    reply = match.group(1).strip()
+                    if reply:
+                        logger.info(f"Fallback extraído via regex: {reply[:50]}...")
+                        return reply
+            
+            # Se ainda não conseguiu, tenta extrair texto antes do primeiro "c2s"
+            if '"c2s"' in texto_resposta:
+                antes_c2s = texto_resposta.split('"c2s"')[0]
+                # Procura por texto entre aspas no início
+                match = re.search(r'"([^"]{10,})"', antes_c2s)
+                if match:
+                    possivel_reply = match.group(1).strip()
+                    if not possivel_reply.startswith('{') and len(possivel_reply) > 5:
+                        logger.info(f"Fallback extraído antes de c2s: {possivel_reply[:50]}...")
+                        return possivel_reply
+            
+            logger.warning("Todos os fallbacks falharam")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro no fallback de extração: {e}")
             return None
