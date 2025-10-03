@@ -3,6 +3,7 @@ import requests
 import logging
 import re
 from datetime import datetime
+from .response_processor_service import response_processor
 
 logger = logging.getLogger(__name__)
 
@@ -404,32 +405,23 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                 texto_resposta = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                 
                 if texto_resposta:
-                    # VERIFICAÇÃO CRÍTICA: Se contém JSON, extrai OBRIGATORIAMENTE
-                    if '{ "reply"' in texto_resposta or '{"reply"' in texto_resposta:
-                        logger.info("JSON detectado na resposta - extraindo reply...")
-                        resposta_final = self._extrair_reply_do_json(texto_resposta)
-                        
-                        if resposta_final:
-                            mensagens = self._quebrar_em_mensagens(resposta_final)
-                            logger.info(f"✅ JSON extraído com sucesso: {resposta_final[:50]}...")
-                            return mensagens
-                        else:
-                            # FALLBACK CRÍTICO: Tenta regex mais agressivo
-                            logger.warning("Extração JSON falhou - tentando regex alternativo...")
-                            fallback_reply = self._extrair_reply_fallback(texto_resposta)
-                            if fallback_reply:
-                                mensagens = self._quebrar_em_mensagens(fallback_reply)
-                                logger.info(f"✅ Fallback extraído: {fallback_reply[:50]}...")
-                                return mensagens
-                            else:
-                                # ÚLTIMO RECURSO: Resposta padrão
-                                logger.error("❌ FALHA CRÍTICA: Não conseguiu extrair reply do JSON!")
-                                return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
-                    else:
-                        # Resposta já está limpa (sem JSON)
-                        mensagens = self._quebrar_em_mensagens(texto_resposta)
-                        logger.info(f"Resposta direta (sem JSON) quebrada em {len(mensagens)} mensagens")
-                        return mensagens
+                    # 🔥 NOVO: PROCESSAMENTO COM RESPONSE PROCESSOR
+                    logger.info("Processando resposta com Response Processor...")
+                    contexto_processamento = {
+                        'is_primeira_mensagem': is_primeira_mensagem,
+                        'precisa_reapresentar': precisa_reapresentar,
+                        'phone': phone,
+                        'lead_data': lead_data
+                    }
+                    
+                    # Delega todo o processamento para o Response Processor
+                    mensagens_processadas = response_processor.processar_resposta(
+                        texto_resposta, 
+                        contexto_processamento
+                    )
+                    
+                    logger.info(f"✅ Resposta processada com sucesso: {len(mensagens_processadas)} mensagens")
+                    return mensagens_processadas
                 else:
                     return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
             else:
@@ -439,98 +431,10 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
             logger.error(f"Erro na geração de resposta: {e}")
             return ["Olá! Obrigada pela mensagem. Nossa equipe retornará em breve."]
     
-    def _extrair_reply_do_json(self, texto_resposta):
-        """Extrai o campo 'reply' do JSON retornado pela IA"""
-        try:
-            import json
-            
-            # Remove quebras de linha e espaços extras
-            texto_limpo = re.sub(r'\s+', ' ', texto_resposta.strip())
-            
-            # Tenta encontrar JSON na resposta
-            # Procura por padrões de JSON que começam com {
-            start_pos = texto_limpo.find('{ "reply"')
-            if start_pos == -1:
-                start_pos = texto_limpo.find('{"reply"')
-            
-            if start_pos != -1:
-                # Encontra o final do JSON balanceando chaves
-                bracket_count = 0
-                end_pos = start_pos
-                
-                for i, char in enumerate(texto_limpo[start_pos:], start_pos):
-                    if char == '{':
-                        bracket_count += 1
-                    elif char == '}':
-                        bracket_count -= 1
-                        if bracket_count == 0:
-                            end_pos = i + 1
-                            break
-                
-                json_text = texto_limpo[start_pos:end_pos]
-                
-                # Tenta fazer parse do JSON
-                try:
-                    json_obj = json.loads(json_text)
-                    reply = json_obj.get('reply', '').strip()
-                    
-                    if reply:
-                        logger.info(f"JSON extraído com sucesso: {reply[:50]}...")
-                        return reply
-                        
-                except json.JSONDecodeError as je:
-                    logger.warning(f"Erro ao fazer parse do JSON: {je}")
-                    
-            # Se não conseguiu extrair JSON, tenta extrair apenas o reply
-            reply_match = re.search(r'"reply":\s*"([^"]+)"', texto_resposta)
-            if reply_match:
-                reply = reply_match.group(1).strip()
-                logger.info(f"Reply extraído via regex: {reply[:50]}...")
-                return reply
-            
-            logger.warning("Não foi possível extrair reply do JSON")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Erro ao extrair reply do JSON: {e}")
-            return None
+    def get_processor_stats(self):
+        """Retorna estatísticas do Response Processor"""
+        return response_processor.get_stats()
     
-    def _extrair_reply_fallback(self, texto_resposta):
-        """Fallback mais agressivo para extrair reply quando o JSON está malformado"""
-        try:
-            import re
-            
-            # Múltiplas tentativas de extração
-            padroes = [
-                r'"reply":\s*"([^"]+)"',  # Padrão básico
-                r'"reply"\s*:\s*"([^"]+)"',  # Com espaços extras
-                r'reply":\s*"([^"]+)"',  # Sem aspas inicial
-                r'"reply":\s*\'([^\']+)\'',  # Com aspas simples
-                r'"reply":\s*"([^"]*)"',  # Aceita string vazia
-            ]
-            
-            for padrao in padroes:
-                match = re.search(padrao, texto_resposta, re.IGNORECASE)
-                if match:
-                    reply = match.group(1).strip()
-                    if reply:
-                        logger.info(f"Fallback extraído via regex: {reply[:50]}...")
-                        return reply
-            
-            # Se ainda não conseguiu, tenta extrair texto antes do primeiro "c2s"
-            if '"c2s"' in texto_resposta:
-                antes_c2s = texto_resposta.split('"c2s"')[0]
-                # Procura por texto entre aspas no início
-                match = re.search(r'"([^"]{10,})"', antes_c2s)
-                if match:
-                    possivel_reply = match.group(1).strip()
-                    if not possivel_reply.startswith('{') and len(possivel_reply) > 5:
-                        logger.info(f"Fallback extraído antes de c2s: {possivel_reply[:50]}...")
-                        return possivel_reply
-            
-            logger.warning("Todos os fallbacks falharam")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Erro no fallback de extração: {e}")
-            return None
+    def reset_processor_stats(self):
+        """Reseta estatísticas do Response Processor"""
+        response_processor.reset_stats()
