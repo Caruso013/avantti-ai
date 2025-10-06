@@ -343,59 +343,54 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
         logger.info(f"Texto quebrado em {len(mensagens)} mensagens")
         return mensagens
     
-    def _verificar_reapresentacao(self, context):
-        """Verifica se precisa se reapresentar após 12 horas desde última interação"""
+    def _verificar_reapresentacao(self, phone, supabase_service):
+        """Verifica se precisa se reapresentar após 12 horas desde última APRESENTAÇÃO (não última mensagem)"""
         try:
-            if not context or len(context) == 0:
-                return False
+            # Usa o SupabaseService para verificar quando foi a última apresentação
+            info_apresentacao = supabase_service.verificar_ultima_apresentacao(phone)
             
-            # Pega a última mensagem do contexto
-            ultima_mensagem = context[-1]
+            if info_apresentacao:
+                precisa = info_apresentacao.get('precisa_reapresentar', False)
+                
+                if precisa:
+                    if info_apresentacao.get('teve_apresentacao'):
+                        logger.info(f"🔄 Reapresentação necessária para {phone} (última há {info_apresentacao.get('horas_desde', 0):.1f}h)")
+                    else:
+                        logger.info(f"✨ Primeira apresentação para {phone}")
+                else:
+                    logger.info(f"✅ Não precisa reapresentar para {phone} (última há {info_apresentacao.get('horas_desde', 0):.1f}h)")
+                
+                return precisa
             
-            # Verifica se tem timestamp
-            if 'timestamp' not in ultima_mensagem:
-                return False
-            
-            # Calcula diferença de tempo
-            from datetime import datetime, timedelta
-            
-            # Parse do timestamp da última mensagem
-            ultimo_timestamp = datetime.fromisoformat(ultima_mensagem['timestamp'].replace('Z', '+00:00'))
-            agora = datetime.now(ultimo_timestamp.tzinfo) if ultimo_timestamp.tzinfo else datetime.now()
-            
-            # Verifica se passou mais de 12 horas
-            diferenca = agora - ultimo_timestamp
-            passou_12_horas = diferenca > timedelta(hours=12)
-            
-            if passou_12_horas:
-                logger.info(f"Passou {diferenca.total_seconds()/3600:.1f} horas desde última interação - reapresentação necessária")
-            
-            return passou_12_horas
+            # Fallback: se não conseguiu verificar, não se apresenta
+            logger.warning(f"⚠️ Não foi possível verificar apresentação para {phone} - não se apresentará")
+            return False
             
         except Exception as e:
-            logger.error(f"Erro ao verificar necessidade de reapresentação: {e}")
+            logger.error(f"❌ Erro ao verificar necessidade de reapresentação: {e}")
             return False
     
-    def gerar_resposta(self, message, phone, context=None, lead_data=None):
+    def gerar_resposta(self, message, phone, context=None, lead_data=None, supabase_service=None):
         """Gera resposta da IA usando GPT-4o-mini configurado para o assistant asst_C4tLHrq74kxj8NUHEUkieU65"""
         try:
-            # Verifica se é a primeira interação (sem contexto ou contexto vazio)
-            is_primeira_mensagem = not context or len(context) == 0
-            
-            # Verifica se precisa se reapresentar após 12 horas
-            precisa_reapresentar = self._verificar_reapresentacao(context)
+            # Verifica se precisa se reapresentar usando o SupabaseService
+            if supabase_service:
+                precisa_reapresentar = self._verificar_reapresentacao(phone, supabase_service)
+            else:
+                # Fallback: se não tem supabase_service, usa lógica antiga
+                logger.warning("⚠️ SupabaseService não fornecido - usando lógica de apresentação simplificada")
+                precisa_reapresentar = not context or len(context) == 0
             
             # Aplica variáveis dinâmicas no prompt
             prompt_personalizado = self._aplicar_variaveis_prompt(self.system_prompt, lead_data)
             
-            # Se é a primeira mensagem OU precisa se reapresentar, reforça a instrução de apresentação
-            if is_primeira_mensagem or precisa_reapresentar:
-                if precisa_reapresentar:
-                    prompt_personalizado += "\n\nIMPORTANTE: Já passou mais de 12 horas desde a última interação com este lead. OBRIGATORIAMENTE se reapresente como Eliane da Evex Imóveis de forma calorosa, como se fosse um novo contato.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
-                else:
-                    prompt_personalizado += "\n\nIMPORTANTE: Esta é a PRIMEIRA mensagem para este lead. OBRIGATORIAMENTE se apresente como Eliane da Evex Imóveis conforme as instruções de apresentação inicial.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
+            # Adiciona instrução de apresentação APENAS se necessário
+            if precisa_reapresentar:
+                logger.info(f"🎤 Adicionando instrução de apresentação para {phone}")
+                prompt_personalizado += "\n\n🎤 APRESENTAÇÃO OBRIGATÓRIA: Se apresente como Eliane da Evex Imóveis conforme as instruções de apresentação inicial. Esta é a primeira mensagem ou já passou 12+ horas desde a última apresentação.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
             else:
-                prompt_personalizado += "\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
+                logger.info(f"💬 Continuando conversa para {phone} (sem apresentação)")
+                prompt_personalizado += "\n\n💬 CONTINUAÇÃO: NÃO se apresente novamente. Continue a conversa de forma natural e contextual, baseando-se no histórico.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
 
             # Payload para usar a API de chat completions com GPT-4o-mini
             messages = [

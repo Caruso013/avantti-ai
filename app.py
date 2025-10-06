@@ -101,10 +101,11 @@ def process_message_queue(phone):
     
     # Extrai texto de todas as mensagens
     consolidated_messages = []
-    for msg in messages_to_process:
+    for i, msg in enumerate(messages_to_process):
         text = msg.get('message', '')
         if text and text.strip():
             consolidated_messages.append(text.strip())
+            logger.debug(f"  Msg [{i+1}]: '{text[:50]}...'")
     
     # Junta todas as mensagens com separador
     consolidated_text = " | ".join(consolidated_messages)

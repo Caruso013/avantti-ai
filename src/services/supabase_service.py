@@ -70,3 +70,56 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Erro ao salvar mensagem: {e}")
             return False
+    
+    def verificar_ultima_apresentacao(self, phone):
+        """Verifica quando foi a última apresentação da IA para este telefone"""
+        try:
+            from datetime import datetime, timedelta, timezone
+            
+            # Busca a última mensagem da IA que contém apresentação
+            url = f"{self.url}/rest/v1/conversations"
+            params = {
+                'phone': f'eq.{phone}',
+                'role': 'eq.assistant',
+                'text': 'ilike.%Eliane, da Evex Imóveis%',
+                'order': 'created_at.desc',
+                'limit': '1'
+            }
+            
+            response = requests.get(url, headers=self.headers, params=params)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data and len(data) > 0:
+                    ultima_apresentacao = data[0]
+                    timestamp_str = ultima_apresentacao.get('created_at')
+                    
+                    if timestamp_str:
+                        # Parse timestamp (ISO format com timezone)
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        agora = datetime.now(timezone.utc)
+                        
+                        diferenca = agora - timestamp
+                        horas_desde_apresentacao = diferenca.total_seconds() / 3600
+                        
+                        logger.info(f"⏰ Última apresentação foi há {horas_desde_apresentacao:.1f} horas para {phone}")
+                        
+                        return {
+                            'teve_apresentacao': True,
+                            'timestamp': timestamp,
+                            'horas_desde': horas_desde_apresentacao,
+                            'precisa_reapresentar': horas_desde_apresentacao > 12
+                        }
+                
+                logger.info(f"✨ Primeira apresentação para {phone}")
+                return {
+                    'teve_apresentacao': False,
+                    'precisa_reapresentar': True
+                }
+            else:
+                logger.error(f"Erro ao verificar última apresentação: {response.text}")
+                return {'teve_apresentacao': False, 'precisa_reapresentar': True}
+                
+        except Exception as e:
+            logger.error(f"Erro ao verificar última apresentação: {e}")
+            return {'teve_apresentacao': False, 'precisa_reapresentar': True}

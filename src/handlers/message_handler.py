@@ -49,7 +49,7 @@ class MessageHandler:
             # Gera resposta da IA (retorna lista de mensagens)
             logger.info(f"📤 Enviando para IA: mensagem='{message[:50]}...', contexto={len(context) if context else 0} msgs")
             mensagens_resposta = self.openai_service.gerar_resposta(
-                message, phone, context, lead_data
+                message, phone, context, lead_data, self.supabase_service
             )
             
             # Salva mensagem recebida (sem emojis)
