@@ -498,7 +498,6 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                     # 🔥 NOVO: PROCESSAMENTO COM RESPONSE PROCESSOR
                     logger.info("Processando resposta com Response Processor...")
                     contexto_processamento = {
-                        'is_primeira_mensagem': is_primeira_mensagem,
                         'precisa_reapresentar': precisa_reapresentar,
                         'phone': phone,
                         'lead_data': lead_data
