@@ -474,6 +474,7 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                 
                 # 🎯 VERIFICAR SE HOUVE FUNCTION CALL
                 tool_calls = message.get('tool_calls')
+                lead_registrado = False
                 if tool_calls:
                     logger.info("🎯 Function call detectado - Processando registro de lead...")
                     for tool_call in tool_calls:
@@ -487,12 +488,22 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                                 success = self._registrar_lead_contact2sale(arguments)
                                 if success:
                                     logger.info(f"✅ Lead registrado com sucesso: {arguments.get('nome', 'Sem nome')}")
+                                    lead_registrado = True
                                 else:
                                     logger.error(f"❌ Falha ao registrar lead: {arguments.get('nome', 'Sem nome')}")
                             except Exception as e:
                                 logger.error(f"Erro ao processar function call: {e}")
                 
-                texto_resposta = message.get('content', '').strip()
+                # Se registrou lead mas não tem texto de resposta, usa mensagem padrão
+                texto_resposta = message.get('content')
+                if texto_resposta:
+                    texto_resposta = texto_resposta.strip()
+                elif lead_registrado:
+                    # Mensagem de sucesso quando lead foi registrado
+                    texto_resposta = "Perfeito, vou notificar o time de vendas, logo entrarão em contato!"
+                    logger.info("🎯 Lead registrado - usando mensagem de sucesso")
+                else:
+                    texto_resposta = ""
                 
                 if texto_resposta:
                     # 🔥 NOVO: PROCESSAMENTO COM RESPONSE PROCESSOR
@@ -529,7 +540,12 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
         Registra lead no Contact2Sale CRM usando function calling
         """
         try:
-            # Importar o client do Contact2Sale
+            # Importar o client do Contact2Sale com caminho absoluto
+            import sys
+            import os
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if root_dir not in sys.path:
+                sys.path.insert(0, root_dir)
             from clients.contact2sale_client import Contact2SaleClient
             
             # Instanciar client
