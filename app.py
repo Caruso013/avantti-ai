@@ -43,14 +43,21 @@ print("============================================================")
 print("🚀 AVANTTI AI - ELIANE VERSÃO FINAL! 🚀")
 print("============================================================")
 print("🤖 Sistema de buffer ativo - Debounce: 5 segundos")
+print("⏰ Timer contínuo: ✅ Ativo (cancelável)")
+print("📦 Consolidação de mensagens: ✅ Ativo")
+print("📞 Function calling: ✅ Ativo")
+print("🎯 Registro automático de leads: ✅ Ativo")
+print("============================================================")
+print("🤖 Sistema de buffer ativo - Debounce: 5 segundos")
 print("📞 Function calling: ✅ Ativo")  
 print("🎯 Registro automático de leads: ✅ Ativo")
 print("============================================================")
 
-# Sistema de filas melhorado
+# Sistema de filas melhorado com debounce contínuo
 message_queues = {}
 processing_lock = threading.Lock()
 active_processors = set()
+debounce_timers = {}  # Timers para debounce por telefone
 
 # Handler principal
 message_handler = MessageHandler()
@@ -70,20 +77,16 @@ def get_queue_for_phone(phone):
     return message_queues[phone]
 
 def process_message_queue(phone):
-    """Processa fila de mensagens usando o novo handler com debounce de 5 segundos"""
+    """Processa fila de mensagens consolidadas (já após debounce)"""
     queue = get_queue_for_phone(phone)
     
-    logger.info(f"🔄 Iniciando processamento para {phone} - {queue.qsize()} mensagens na fila")
+    logger.info(f"🔄 Processando fila para {phone} - {queue.qsize()} mensagens acumuladas")
     
-    # 🎯 DEBOUNCE: Aguarda 5 segundos para acumular mensagens
-    logger.info(f"⏱️ Aguardando 5 segundos (debounce) para acumular mensagens de {phone}...")
-    time.sleep(5)
-    
-    # Coleta todas as mensagens que chegaram durante o debounce
+    # Coleta todas as mensagens da fila (sem esperar - já foi feito o debounce)
     messages_to_process = []
     while not queue.empty():
         try:
-            message_data = queue.get(timeout=1)
+            message_data = queue.get(timeout=0.1)
             messages_to_process.append(message_data)
             queue.task_done()
         except:
@@ -93,70 +96,83 @@ def process_message_queue(phone):
         logger.info(f"❌ Nenhuma mensagem para processar para {phone}")
         return
     
-    # Processa apenas a ÚLTIMA mensagem (mais recente)
-    latest_message = messages_to_process[-1]
+    # 🎯 CONSOLIDA TODAS as mensagens em UMA mensagem única
+    logger.info(f"📝 Consolidando {len(messages_to_process)} mensagens em uma resposta única")
     
-    logger.info(f"📝 Processando ÚLTIMA mensagem de {len(messages_to_process)} recebidas")
-    logger.info(f"🎯 Descartando {len(messages_to_process)-1} mensagens anteriores (anti-spam)")
+    # Extrai texto de todas as mensagens
+    consolidated_messages = []
+    for msg in messages_to_process:
+        text = msg.get('message', '')
+        if text and text.strip():
+            consolidated_messages.append(text.strip())
+    
+    # Junta todas as mensagens com separador
+    consolidated_text = " | ".join(consolidated_messages)
+    
+    logger.info(f"🎯 Mensagem consolidada: '{consolidated_text[:100]}...'")
+    logger.info(f"📦 Total de {len(consolidated_messages)} mensagens consolidadas")
     
     try:
-        message_text = latest_message.get('message', '')
-        message_type = latest_message.get('type', 'text')
+        # Usa a mensagem consolidada
+        message_text = consolidated_text
+        message_type = 'text'  # Sempre texto consolidado
         
-        logger.info(f"🔥 Processando {message_type}: '{message_text[:50]}...' de {phone}")
+        logger.info(f"🔥 Processando mensagem consolidada: '{message_text[:50]}...' de {phone}")
         
         if message_text:
             metrics['messages_processed'] += 1
             
             # Cria dados para o handler
-            if message_type == 'audio':
-                metrics['audio_transcriptions'] += 1
-                # Para áudio, usa handler específico
-                handler_data = {
-                    'phone': phone,
-                    'message': {'audioUrl': message_text}  # URL do áudio
-                }
-                message_handler.processar_mensagem_audio(handler_data)
-                # Para texto, imagem, vídeo
-                handler_data = {
-                    'phone': phone,
-                    'message': {'text': message_text}
-                }
-                message_handler.processar_mensagem_texto(handler_data)
+            handler_data = {
+                'phone': phone,
+                'message': {'text': message_text}
+            }
+            message_handler.processar_mensagem_texto(handler_data)
         
-        logger.info(f"✅ Mensagem processada com sucesso para {phone}")
+        logger.info(f"✅ Mensagem consolidada processada com sucesso para {phone}")
         
     except Exception as e:
-        logger.error(f"❌ Erro no processamento da mensagem: {e}")
+        logger.error(f"❌ Erro no processamento da mensagem consolidada: {e}")
         metrics['errors'] += 1
     
     logger.info(f"🏁 Processamento concluído para {phone}")
 
 def start_queue_processor(phone):
-    """Inicia processador da fila com melhor controle"""
-    global active_processors
+    """Inicia processador da fila com debounce contínuo"""
+    global active_processors, debounce_timers
     
     with processing_lock:
-        if phone in active_processors:
-            logger.info(f"Processador já ativo para {phone}")
-            return
+        # Se já existe um timer, cancela o anterior
+        if phone in debounce_timers:
+            debounce_timers[phone].cancel()
+            logger.info(f"🔄 Timer anterior cancelado para {phone} - nova mensagem recebida")
         
-        active_processors.add(phone)
-        logger.info(f"Iniciando processador para {phone}")
-    
-    def worker():
-        try:
-            process_message_queue(phone)
-        except Exception as e:
-            logger.error(f"Erro no worker: {e}")
-        finally:
-            with processing_lock:
-                active_processors.discard(phone)
-                logger.info(f"Processador finalizado para {phone}")
-    
-    thread = threading.Thread(target=worker, name=f"queue-{phone}")
-    thread.daemon = True
-    thread.start()
+        # Se já tem processador ativo, apenas redefine o timer
+        if phone in active_processors:
+            logger.info(f"⏱️ Processador ativo para {phone} - redefinindo timer de 5s")
+        else:
+            logger.info(f"🚀 Iniciando novo processador para {phone}")
+            active_processors.add(phone)
+        
+        # Cria novo timer de 5 segundos
+        timer = threading.Timer(5.0, lambda: _execute_processor(phone))
+        debounce_timers[phone] = timer
+        timer.start()
+        
+        logger.info(f"⏰ Timer de 5s iniciado para {phone}")
+
+def _execute_processor(phone):
+    """Executa o processamento após o debounce"""
+    try:
+        logger.info(f"🎯 Executando processamento para {phone} após debounce")
+        process_message_queue(phone)
+    except Exception as e:
+        logger.error(f"Erro no processamento: {e}")
+    finally:
+        with processing_lock:
+            active_processors.discard(phone)
+            debounce_timers.pop(phone, None)
+            logger.info(f"🏁 Processador finalizado para {phone}")
 
 def extract_message_content(payload):
     """Extrai conteúdo da mensagem dependendo do tipo"""
