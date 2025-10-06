@@ -2,6 +2,7 @@ import os
 import requests
 import logging
 import re
+import json
 from datetime import datetime
 from .response_processor_service import response_processor
 
@@ -179,12 +180,26 @@ Bot: "Perfeito! Para investimento recomendo o Ecolife em Fazenda Rio Grande ou a
 - Nunca usar o nome automático do WhatsApp.
 - Se não houver nome, usar abertura neutra.
 
-# 6. Critérios de Qualificação
+# 6. Critérios de Qualificação e REGISTRO AUTOMÁTICO
 Lead é qualificado se:
 - Demonstra interesse real no empreendimento, ou
 - Pede informações sobre condições de pagamento, ou
 - Responde positivamente às etapas 1, 3 e 4, ou
 - Fornece informações detalhadas sobre orçamento e timing.
+
+🎯 **ATENÇÃO FUNCTION CALLING**: Quando um lead fornecer NOME + demonstrar INTERESSE genuíno, CHAME AUTOMATICAMENTE a função `registrar_lead` com os dados coletados:
+- Nome completo do lead
+- Telefone (sempre disponível)
+- Email se fornecido
+- Tipo de interesse (investimento/residencial/comercial)
+- Orçamento mencionado
+- Localização de interesse
+
+🚨 EXEMPLOS PARA FUNCTION CALLING:
+- Lead: "Oi, sou Pedro, quero informações sobre investimento" → REGISTRAR LEAD
+- Lead: "Meu nome é Ana, estou procurando apartamento" → REGISTRAR LEAD  
+- Lead: "Me chamo João, tenho R$ 300k para investir" → REGISTRAR LEAD
+- Lead: "Sou Maria, quero saber sobre os empreendimentos" → REGISTRAR LEAD
 
 # 7. Restrições RIGOROSAS
 - ✅ Pode informar: APENAS o que está listado na seção 4 (lista de empreendimentos e informações comerciais básicas)
@@ -390,7 +405,47 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
                 "model": "gpt-4o-mini",  # Modelo configurado para o assistant
                 "messages": messages,
                 "max_tokens": 300,  # Aumentado para acomodar JSON
-                "temperature": 0.7
+                "temperature": 0.7,
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "registrar_lead",
+                            "description": "Registra automaticamente um lead qualificado no Contact2Sale CRM quando coleta nome, telefone e demonstra interesse em investir em imóveis",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "nome": {
+                                        "type": "string",
+                                        "description": "Nome completo do lead"
+                                    },
+                                    "telefone": {
+                                        "type": "string", 
+                                        "description": "Telefone do lead (sempre disponível no contexto)"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "description": "Email do lead se fornecido"
+                                    },
+                                    "interesse": {
+                                        "type": "string",
+                                        "description": "Tipo de interesse: investimento, residencial, comercial"
+                                    },
+                                    "orcamento": {
+                                        "type": "string",
+                                        "description": "Faixa de orçamento mencionada pelo lead"
+                                    },
+                                    "localizacao": {
+                                        "type": "string",
+                                        "description": "Localização de interesse mencionada"
+                                    }
+                                },
+                                "required": ["nome", "telefone"]
+                            }
+                        }
+                    }
+                ],
+                "tool_choice": "auto"
             }
 
             response = requests.post(
@@ -402,7 +457,30 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
 
             if response.status_code == 200:
                 result = response.json()
-                texto_resposta = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                choice = result.get('choices', [{}])[0]
+                message = choice.get('message', {})
+                
+                # 🎯 VERIFICAR SE HOUVE FUNCTION CALL
+                tool_calls = message.get('tool_calls')
+                if tool_calls:
+                    logger.info("🎯 Function call detectado - Processando registro de lead...")
+                    for tool_call in tool_calls:
+                        if tool_call.get('function', {}).get('name') == 'registrar_lead':
+                            try:
+                                # Extrair argumentos da function call
+                                arguments = json.loads(tool_call.get('function', {}).get('arguments', '{}'))
+                                arguments['telefone'] = phone  # Garantir que o telefone está correto
+                                
+                                # Registrar lead no Contact2Sale
+                                success = self._registrar_lead_contact2sale(arguments)
+                                if success:
+                                    logger.info(f"✅ Lead registrado com sucesso: {arguments.get('nome', 'Sem nome')}")
+                                else:
+                                    logger.error(f"❌ Falha ao registrar lead: {arguments.get('nome', 'Sem nome')}")
+                            except Exception as e:
+                                logger.error(f"Erro ao processar function call: {e}")
+                
+                texto_resposta = message.get('content', '').strip()
                 
                 if texto_resposta:
                     # 🔥 NOVO: PROCESSAMENTO COM RESPONSE PROCESSOR
@@ -434,6 +512,45 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
     def get_processor_stats(self):
         """Retorna estatísticas do Response Processor"""
         return response_processor.get_stats()
+    
+    def _registrar_lead_contact2sale(self, lead_data):
+        """
+        Registra lead no Contact2Sale CRM usando function calling
+        """
+        try:
+            # Importar o client do Contact2Sale
+            from clients.contact2sale_client import Contact2SaleClient
+            
+            # Instanciar client
+            c2s_client = Contact2SaleClient()
+            
+            # Preparar dados do lead para o Contact2Sale
+            lead_payload = {
+                "name": lead_data.get('nome', ''),
+                "phone": lead_data.get('telefone', ''),
+                "email": lead_data.get('email', ''),
+                "interest": lead_data.get('interesse', 'Investimento Imobiliário'),
+                "budget": lead_data.get('orcamento', ''),
+                "location": lead_data.get('localizacao', ''),
+                "source": "WhatsApp Bot - Avantti AI",
+                "status": "Novo Lead - Qualificado por IA",
+                "notes": f"Lead qualificado automaticamente via function calling. Interesse: {lead_data.get('interesse', 'Investimento')}",
+                "created_at": datetime.now().isoformat()
+            }
+            
+            # Enviar para Contact2Sale
+            resultado = c2s_client.create_lead(lead_payload)
+            
+            if resultado:
+                logger.info(f"🎯 Lead registrado no Contact2Sale: {lead_data.get('nome')} - {lead_data.get('telefone')}")
+                return True
+            else:
+                logger.error(f"❌ Falha ao registrar lead no Contact2Sale: {lead_data}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro ao registrar lead no Contact2Sale: {e}")
+            return False
     
     def reset_processor_stats(self):
         """Reseta estatísticas do Response Processor"""

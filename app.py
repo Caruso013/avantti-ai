@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 import logging
 
 # Versão da aplicação
-AVANTTI_VERSION = "4.0.1"
-AVANTTI_CODENAME = "Clean Interface & 10s Response"
+AVANTTI_VERSION = "FINAL"
+AVANTTI_CODENAME = "AVANTTI AI - ELIANE VERSÃO FINAL!"
 
 # Adiciona o diretório atual ao PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -39,7 +39,9 @@ if not config_manager.validate_config():
     logger.error("Configuracoes invalidas. Verifique as variaveis de ambiente.")
     exit(1)
 
-print("=== AVANTTI AI - ELIANE V4 MODULAR ===")
+print("============================================================")
+print("🚀 AVANTTI AI - ELIANE VERSÃO FINAL! 🚀")
+print("============================================================")
 
 # Sistema de filas melhorado
 message_queues = {}
