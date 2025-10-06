@@ -41,11 +41,13 @@ class MessageHandler:
             
             # Busca contexto da conversa
             context = self.supabase_service.buscar_contexto_conversa(phone)
+            logger.info(f"🔄 Contexto recuperado para {phone}: {len(context) if context else 0} mensagens")
             
             # Obtém dados do lead para personalização
             lead_data = self.lead_data_service.get_lead_data_for_prompt(phone)
             
             # Gera resposta da IA (retorna lista de mensagens)
+            logger.info(f"📤 Enviando para IA: mensagem='{message[:50]}...', contexto={len(context) if context else 0} msgs")
             mensagens_resposta = self.openai_service.gerar_resposta(
                 message, phone, context, lead_data
             )

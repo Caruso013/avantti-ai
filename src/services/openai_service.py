@@ -390,17 +390,25 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
 
             # Payload para usar a API de chat completions com GPT-4o-mini
             messages = [
-                {"role": "system", "content": prompt_personalizado},
-                {"role": "user", "content": message}
+                {"role": "system", "content": prompt_personalizado}
             ]
             
-            # Se houver contexto, adiciona mensagens anteriores
+            # Se houver contexto, adiciona mensagens anteriores NA ORDEM CRONOLÓGICA
             if context:
-                # Adiciona contexto antes da mensagem atual
-                for ctx in context[-5:]:  # Últimas 5 mensagens
+                logger.info(f"🔄 Adicionando contexto: {len(context)} mensagens anteriores")
+                # Adiciona TODAS as mensagens do contexto em ordem cronológica
+                for ctx in context[-10:]:  # Últimas 10 mensagens para mais contexto
                     role = "user" if ctx.get('sender') == 'user' else "assistant"
-                    messages.insert(-1, {"role": role, "content": ctx.get('message', '')})
-
+                    msg_content = ctx.get('message', '').strip()
+                    if msg_content:  # Só adiciona se tiver conteúdo
+                        messages.append({"role": role, "content": msg_content})
+                        logger.debug(f"Contexto adicionado: {role} - {msg_content[:50]}...")
+            
+            # AGORA adiciona a mensagem atual por último
+            messages.append({"role": "user", "content": message})
+            
+            logger.info(f"📝 Total de mensagens enviadas para IA: {len(messages)} (incluindo system prompt)")
+            
             data = {
                 "model": "gpt-4o-mini",  # Modelo configurado para o assistant
                 "messages": messages,

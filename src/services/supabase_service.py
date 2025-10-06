@@ -28,14 +28,24 @@ class SupabaseService:
             if response.status_code == 200:
                 mensagens = response.json()
                 contexto = []
-                for msg in reversed(mensagens):
+                for msg in reversed(mensagens):  # Ordem cronológica
                     if msg.get('text'):
+                        # Formato compatível com OpenAIService
                         contexto.append({
-                            "role": msg.get('role', 'user'),
-                            "content": msg.get('text')
+                            "sender": msg.get('role', 'user'),  # 'user' ou 'assistant'
+                            "message": msg.get('text'),          # Conteúdo da mensagem
+                            "timestamp": msg.get('created_at')   # Para debug
                         })
-                logger.info(f"Contexto carregado: {len(contexto)} mensagens para {phone}")
+                logger.info(f"✅ Contexto carregado: {len(contexto)} mensagens para {phone}")
+                
+                # Log do contexto para debug
+                for i, ctx in enumerate(contexto):
+                    logger.debug(f"Contexto[{i}]: {ctx['sender']} - {ctx['message'][:30]}...")
+                
                 return contexto
+            else:
+                logger.warning(f"Erro ao buscar contexto: {response.status_code}")
+                return []
             return []
         except Exception as e:
             logger.error(f"Erro ao buscar contexto: {e}")

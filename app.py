@@ -42,6 +42,10 @@ if not config_manager.validate_config():
 print("============================================================")
 print("🚀 AVANTTI AI - ELIANE VERSÃO FINAL! 🚀")
 print("============================================================")
+print("🤖 Sistema de buffer ativo - Debounce: 5 segundos")
+print("📞 Function calling: ✅ Ativo")  
+print("🎯 Registro automático de leads: ✅ Ativo")
+print("============================================================")
 
 # Sistema de filas melhorado
 message_queues = {}
@@ -66,51 +70,67 @@ def get_queue_for_phone(phone):
     return message_queues[phone]
 
 def process_message_queue(phone):
-    """Processa fila de mensagens usando o novo handler"""
+    """Processa fila de mensagens usando o novo handler com debounce de 5 segundos"""
     queue = get_queue_for_phone(phone)
     
-    logger.info(f"Iniciando processamento para {phone} - {queue.qsize()} mensagens")
+    logger.info(f"🔄 Iniciando processamento para {phone} - {queue.qsize()} mensagens na fila")
     
+    # 🎯 DEBOUNCE: Aguarda 5 segundos para acumular mensagens
+    logger.info(f"⏱️ Aguardando 5 segundos (debounce) para acumular mensagens de {phone}...")
+    time.sleep(5)
+    
+    # Coleta todas as mensagens que chegaram durante o debounce
+    messages_to_process = []
     while not queue.empty():
         try:
-            message_data = queue.get(timeout=5)
-            message_text = message_data.get('message', '')
-            message_type = message_data.get('type', 'text')
-            
-            logger.info(f"Processando {message_type}: '{message_text[:50]}...' de {phone}")
-            
-            if message_text:
-                metrics['messages_processed'] += 1
-                
-                # Cria dados para o handler
-                if message_type == 'audio':
-                    metrics['audio_transcriptions'] += 1
-                    # Para áudio, usa handler específico
-                    handler_data = {
-                        'phone': phone,
-                        'message': {'audioUrl': message_text}  # URL do áudio
-                    }
-                    message_handler.processar_mensagem_audio(handler_data)
-                else:
-                    # Para texto, imagem, vídeo
-                    handler_data = {
-                        'phone': phone,
-                        'message': {'text': message_text}
-                    }
-                    message_handler.processar_mensagem_texto(handler_data)
-            
+            message_data = queue.get(timeout=1)
+            messages_to_process.append(message_data)
             queue.task_done()
-            time.sleep(1)  # Evita spam
-            
-        except Exception as e:
-            logger.error(f"Erro no processamento: {e}")
-            metrics['errors'] += 1
-            try:
-                queue.task_done()
-            except:
-                pass
+        except:
+            break
     
-    logger.info(f"Processamento concluído para {phone}")
+    if not messages_to_process:
+        logger.info(f"❌ Nenhuma mensagem para processar para {phone}")
+        return
+    
+    # Processa apenas a ÚLTIMA mensagem (mais recente)
+    latest_message = messages_to_process[-1]
+    
+    logger.info(f"📝 Processando ÚLTIMA mensagem de {len(messages_to_process)} recebidas")
+    logger.info(f"🎯 Descartando {len(messages_to_process)-1} mensagens anteriores (anti-spam)")
+    
+    try:
+        message_text = latest_message.get('message', '')
+        message_type = latest_message.get('type', 'text')
+        
+        logger.info(f"🔥 Processando {message_type}: '{message_text[:50]}...' de {phone}")
+        
+        if message_text:
+            metrics['messages_processed'] += 1
+            
+            # Cria dados para o handler
+            if message_type == 'audio':
+                metrics['audio_transcriptions'] += 1
+                # Para áudio, usa handler específico
+                handler_data = {
+                    'phone': phone,
+                    'message': {'audioUrl': message_text}  # URL do áudio
+                }
+                message_handler.processar_mensagem_audio(handler_data)
+                # Para texto, imagem, vídeo
+                handler_data = {
+                    'phone': phone,
+                    'message': {'text': message_text}
+                }
+                message_handler.processar_mensagem_texto(handler_data)
+        
+        logger.info(f"✅ Mensagem processada com sucesso para {phone}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no processamento da mensagem: {e}")
+        metrics['errors'] += 1
+    
+    logger.info(f"🏁 Processamento concluído para {phone}")
 
 def start_queue_processor(phone):
     """Inicia processador da fila com melhor controle"""
