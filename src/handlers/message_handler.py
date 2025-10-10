@@ -125,18 +125,25 @@ class MessageHandler:
             return False
     
     def _enviar_mensagens_com_delay(self, phone, mensagens):
-        """Envia mensagens com delay de 10s usando ZAPIClient"""
+        """Envia mensagens com delay de 10s inicial e 3s entre mensagens"""
         try:
             import time
             
             # Delay inicial de 10 segundos
             time.sleep(10)
             
-            # Envia cada mensagem (ZAPIClient já quebra e filtra emojis automaticamente)
-            for mensagem in mensagens:
-                # Remove emojis manualmente também por garantia
+            # Envia mensagens com delay de 3s entre elas
+            for i, mensagem in enumerate(mensagens):
+                # Remove emojis manualmente por garantia
                 mensagem_limpa = self._remover_emojis(mensagem)
+                
+                # Envia a mensagem
                 self.zapi_client.send_message(phone, mensagem_limpa)
+                
+                # Delay de 3 segundos entre mensagens (exceto na última)
+                if i < len(mensagens) - 1:
+                    logger.info(f"⏳ Aguardando 3s antes da próxima mensagem...")
+                    time.sleep(3)
                 
         except Exception as e:
             logger.error(f"Erro ao enviar mensagens com delay: {e}")
