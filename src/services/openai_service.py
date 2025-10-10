@@ -1,10 +1,19 @@
 import os
+import sys
 import requests
 import logging
 import re
 import json
 from datetime import datetime
 from .response_processor_service import response_processor
+
+# Adicionar root do projeto ao sys.path para importar clients
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+# Importar Contact2SaleClient e LeadData
+from clients.contact2sale_client import Contact2SaleClient, LeadData
 
 logger = logging.getLogger(__name__)
 
@@ -589,39 +598,59 @@ MANTENHA-SE NO SEU PAPEL: Você é SDR (pré-vendas), seu trabalho é QUALIFICAR
         Registra lead no Contact2Sale CRM usando function calling
         """
         try:
-            # Importar o client do Contact2Sale com caminho absoluto
-            import sys
-            import os
-            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            if root_dir not in sys.path:
-                sys.path.insert(0, root_dir)
-            from clients.contact2sale_client import Contact2SaleClient
+            # Obter credenciais do Contact2Sale
+            jwt_token = os.getenv('C2S_JWT_TOKEN')
+            company_id = os.getenv('C2S_COMPANY_ID_EVEX')
+            seller_id = os.getenv('C2S_SELLER_ID')
             
-            # Instanciar client
-            c2s_client = Contact2SaleClient()
+            if not jwt_token:
+                logger.error("❌ C2S_JWT_TOKEN não configurado")
+                return False
             
-            # Preparar dados do lead para o Contact2Sale
-            lead_payload = {
-                "name": lead_data.get('nome', ''),
-                "phone": lead_data.get('telefone', ''),
-                "email": lead_data.get('email', ''),
-                "interest": lead_data.get('interesse', 'Investimento Imobiliário'),
-                "budget": lead_data.get('orcamento', ''),
-                "location": lead_data.get('localizacao', ''),
-                "source": "WhatsApp Bot - Avantti AI",
-                "status": "Novo Lead - Qualificado por IA",
-                "notes": f"Lead qualificado automaticamente via function calling. Interesse: {lead_data.get('interesse', 'Investimento')}",
-                "created_at": datetime.now().isoformat()
-            }
+            # Instanciar client com credenciais
+            c2s_client = Contact2SaleClient(
+                jwt_token=jwt_token,
+                company_id=company_id,
+                seller_id=seller_id
+            )
+            
+            # Preparar dados usando a classe LeadData
+            nome = lead_data.get('nome', '')
+            telefone = lead_data.get('telefone', '')
+            email = lead_data.get('email', '')
+            interesse = lead_data.get('interesse', 'Investimento Imobiliário')
+            
+            # Criar body com informações completas
+            body = f"Lead qualificado via IA - Eliane (WhatsApp Bot)\n\n"
+            body += f"Interesse: {interesse}\n"
+            if lead_data.get('orcamento'):
+                body += f"Orçamento: {lead_data.get('orcamento')}\n"
+            if lead_data.get('localizacao'):
+                body += f"Localização: {lead_data.get('localizacao')}\n"
+            body += f"\nQualificado automaticamente em: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            
+            # Criar objeto LeadData
+            lead = LeadData(
+                name=nome,
+                phone=telefone,
+                email=email if email else None,
+                body=body,
+                source="WhatsApp Bot - Avantti AI",
+                description=f"Lead qualificado por IA - Interesse: {interesse}"
+            )
             
             # Enviar para Contact2Sale
-            resultado = c2s_client.create_lead(lead_payload)
+            logger.info(f"📤 Enviando lead para Contact2Sale: {nome} - {telefone}")
+            resultado = c2s_client.create_lead(lead)
             
-            if resultado:
-                logger.info(f"🎯 Lead registrado no Contact2Sale: {lead_data.get('nome')} - {lead_data.get('telefone')}")
+            if resultado.success:
+                logger.info(f"✅ Lead registrado no Contact2Sale: {nome} - {telefone}")
+                logger.info(f"   Resposta: {resultado.data}")
                 return True
             else:
-                logger.error(f"❌ Falha ao registrar lead no Contact2Sale: {lead_data}")
+                logger.error(f"❌ Falha ao registrar lead no Contact2Sale")
+                logger.error(f"   Erro: {resultado.error}")
+                logger.error(f"   Status: {resultado.status_code}")
                 return False
                 
         except Exception as e:
