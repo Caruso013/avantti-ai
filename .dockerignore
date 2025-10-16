@@ -82,7 +82,7 @@ interfaces/
 repositories/
 services/
 tools/
-utils/
+# utils/  # REMOVIDO - necessário para produção (logger)
 workers/
 validate_config.py
 start_server.py
