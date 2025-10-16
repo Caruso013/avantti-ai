@@ -77,40 +77,56 @@ class MessageHandler:
             logger.error(f"Erro ao processar mensagem de texto: {e}")
     
     def processar_mensagem_audio(self, data):
-        """Processa mensagem de áudio recebida"""
+        """Processa mensagem de áudio recebida (baixa, transcreve e envia para IA)"""
+        import tempfile
+        import requests
+        import os
         try:
             phone = data.get('phone')
             audio_url = data.get('message', {}).get('audioUrl', '')
-            
             if not phone or not audio_url:
                 logger.warning("Dados incompletos na mensagem de áudio")
                 return
-            
             logger.info(f"Processando áudio de {phone}")
-            
-            # Transcreve o áudio
-            texto_transcrito = self.whisper_service.transcribe_audio(audio_url)
-            
+
+            # Baixa o arquivo de áudio para um arquivo temporário
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
+                    logger.info(f"Baixando áudio de {audio_url} para {temp_audio.name}")
+                    resp = requests.get(audio_url, stream=True, timeout=20)
+                    resp.raise_for_status()
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        temp_audio.write(chunk)
+                    temp_audio_path = temp_audio.name
+            except Exception as e:
+                logger.error(f"Erro ao baixar áudio: {e}")
+                self._enviar_mensagens_com_delay(phone, ["Não consegui baixar o áudio. Pode tentar novamente?"])
+                return
+
+            # Transcreve o áudio localmente
+            try:
+                texto_transcrito = self.whisper_service.transcribe_audio(temp_audio_path)
+            except Exception as e:
+                logger.error(f"Erro ao transcrever áudio: {e}")
+                self._enviar_mensagens_com_delay(phone, ["Não consegui transcrever o áudio. Pode tentar novamente?"])
+                os.remove(temp_audio_path)
+                return
+
+            # Remove arquivo temporário
+            try:
+                os.remove(temp_audio_path)
+            except Exception as e:
+                logger.warning(f"Não foi possível remover arquivo temporário: {e}")
+
             if texto_transcrito:
-                # Cria dados simulando mensagem de texto
                 texto_data = {
                     'phone': phone,
                     'message': {'text': texto_transcrito}
                 }
-                
-                # Processa como mensagem de texto
                 self.processar_mensagem_texto(texto_data)
             else:
-                # Envia mensagem de erro
                 mensagem_erro = ["Desculpe, não consegui entender o áudio. Pode escrever sua mensagem?"]
-                
-                thread = threading.Thread(
-                    target=self._enviar_mensagens_com_delay,
-                    args=(phone, mensagem_erro)
-                )
-                thread.daemon = True
-                thread.start()
-            
+                self._enviar_mensagens_com_delay(phone, mensagem_erro)
         except Exception as e:
             logger.error(f"Erro ao processar mensagem de áudio: {e}")
     

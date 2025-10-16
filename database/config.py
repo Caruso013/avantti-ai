@@ -13,23 +13,15 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 # Cliente Supabase
 supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Para compatibilidade com SQLAlchemy (se necessário)
-# Supabase usa PostgreSQL por baixo, então podemos usar a URL de conexão direta
-# Formato: postgresql://[user[:password]@][netloc][:port][/dbname]
-# Para Supabase, extraímos a info da URL
 def get_postgres_url_from_supabase():
-    """
-    Converte URL do Supabase para URL PostgreSQL direta
-    Exemplo: https://abc.supabase.co -> postgresql://postgres:[password]@db.abc.supabase.co:5432/postgres
-    """
+
     if not SUPABASE_URL:
         raise ValueError("SUPABASE_URL não configurada")
     
-    # Extrai o ID do projeto da URL
+
     project_id = SUPABASE_URL.replace('https://', '').replace('.supabase.co', '')
     
-    # Monta a URL do PostgreSQL
-    # Nota: Para usar conexão direta, você precisa da senha do banco no Supabase
+
     db_password = os.getenv('SUPABASE_DB_PASSWORD', '')
     
     if db_password:

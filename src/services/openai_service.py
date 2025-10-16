@@ -7,6 +7,14 @@ import json
 from datetime import datetime
 from .response_processor_service import response_processor
 
+# Adicionar root do projeto ao sys.path para importar clients
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+# Importar Contact2SaleClient e LeadData
+from clients.contact2sale_client import Contact2SaleClient, LeadData
+
 logger = logging.getLogger(__name__)
 
 class OpenAIService:
@@ -590,18 +598,10 @@ MANTENHA-SE NO SEU PAPEL: Você é SDR (pré-vendas), seu trabalho é QUALIFICAR
         Registra lead no Contact2Sale CRM usando function calling
         """
         try:
-            # Import dinâmico do Contact2SaleClient (evita erro de módulo no startup)
-            import sys
-            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            if root_dir not in sys.path:
-                sys.path.insert(0, root_dir)
-            
-            from clients.contact2sale_client import Contact2SaleClient, LeadData
-            
             # Obter credenciais do Contact2Sale
             jwt_token = os.getenv('C2S_JWT_TOKEN')
-            company_id = os.getenv('C2S_COMPANY_ID')
-            seller_id = os.getenv('C2S_SELLER_ID', '')
+            company_id = os.getenv('C2S_COMPANY_ID_EVEX')
+            seller_id = os.getenv('C2S_SELLER_ID')
             
             if not jwt_token:
                 logger.error("❌ C2S_JWT_TOKEN não configurado")
