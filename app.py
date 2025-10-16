@@ -96,7 +96,36 @@ def process_message_queue(phone):
         logger.info(f"❌ Nenhuma mensagem para processar para {phone}")
         return
     
-    # 🎯 CONSOLIDA TODAS as mensagens em UMA mensagem única
+    # 🔍 VERIFICA SE HÁ MENSAGENS DE ÁUDIO
+    audio_messages = [msg for msg in messages_to_process if msg.get('type') == 'audio']
+    
+    if audio_messages:
+        # 🎵 PRIORIZA ÁUDIO - processa apenas a primeira mensagem de áudio
+        logger.info(f"🎵 Detectado {len(audio_messages)} mensagem(ns) de áudio - processando áudio")
+        audio_data = audio_messages[0]  # Processa apenas a primeira
+        
+        try:
+            metrics['audio_transcriptions'] += 1
+            
+            # Cria dados para o handler de áudio
+            handler_data = {
+                'phone': phone,
+                'message': {
+                    'audioUrl': audio_data.get('message', '')
+                }
+            }
+            message_handler.processar_mensagem_audio(handler_data)
+            
+            logger.info(f"✅ Áudio processado com sucesso para {phone}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no processamento de áudio: {e}")
+            metrics['errors'] += 1
+        
+        logger.info(f"🏁 Processamento de áudio concluído para {phone}")
+        return
+    
+    # 🎯 CONSOLIDA MENSAGENS DE TEXTO/IMAGEM/VIDEO
     logger.info(f"📝 Consolidando {len(messages_to_process)} mensagens em uma resposta única")
     
     # Extrai texto de todas as mensagens
@@ -181,26 +210,36 @@ def extract_message_content(payload):
         if not isinstance(payload, dict):
             return None, 'invalid'
         
+        # Verifica se é mensagem de áudio (múltiplas possibilidades)
+        if payload.get('audio') or payload.get('message', {}).get('audio'):
+            audio_obj = payload.get('audio') or payload.get('message', {}).get('audio', {})
+            if isinstance(audio_obj, dict):
+                audio_url = audio_obj.get('audioUrl') or audio_obj.get('url')
+                if audio_url and audio_url.startswith(('http://', 'https://')):
+                    logger.info(f"🎵 Áudio detectado: {audio_url[:50]}...")
+                    return audio_url, 'audio'
+        
+        # Verifica se a mensagem contém uma URL que parece ser de áudio
+        message_obj = payload.get('message', {})
+        if isinstance(message_obj, dict):
+            conversation = message_obj.get('conversation', '').strip()
+            if conversation and conversation.startswith(('http://', 'https://')) and ('audio' in conversation.lower() or 'temp-file' in conversation.lower()):
+                logger.info(f"🎵 Áudio detectado via URL na conversa: {conversation[:50]}...")
+                return conversation, 'audio'
+        
         # Mensagem de texto
-        if payload.get('text'):
-            text_obj = payload.get('text', {})
+        if payload.get('text') or payload.get('message', {}).get('conversation'):
+            text_obj = payload.get('text') or payload.get('message', {}).get('conversation', '')
             if isinstance(text_obj, dict):
                 message = text_obj.get('message', '').strip()
                 if len(message) > 4000:
                     message = message[:4000] + "... [truncado]"
                 return message, 'text'
-            return str(text_obj)[:4000], 'text'
-        
-        # Mensagem de áudio
-        elif payload.get('audio'):
-            audio_obj = payload.get('audio', {})
-            if isinstance(audio_obj, dict):
-                audio_url = audio_obj.get('audioUrl') or audio_obj.get('url')
-                if audio_url and audio_url.startswith(('http://', 'https://')):
-                    # Retorna URL para ser processada pelo handler
-                    return audio_url, 'audio'
-                else:
-                    return "URL de áudio inválida", 'audio_error'
+            elif isinstance(text_obj, str):
+                message = text_obj.strip()
+                if len(message) > 4000:
+                    message = message[:4000] + "... [truncado]"
+                return message, 'text'
         
         # Mensagem de imagem com caption
         elif payload.get('image'):
