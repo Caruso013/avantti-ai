@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Configura PYTHONPATH para resolver imports
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="/app"
 
 # Expõe a porta 5000
 EXPOSE 5000
@@ -55,5 +55,8 @@ ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=${APP_PORT:-5000}
 ENV PORT=${APP_PORT:-5000}
 
+# Torna o script executável
+RUN chmod +x entrypoint.sh
+
 # Comando para executar a aplicação
-CMD ["python", "main.py"]
+CMD ["./entrypoint.sh"]
