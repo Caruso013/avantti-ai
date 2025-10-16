@@ -87,48 +87,75 @@ class MessageHandler:
             if not phone or not audio_url:
                 logger.warning("Dados incompletos na mensagem de áudio")
                 return
-            logger.info(f"Processando áudio de {phone}")
+            logger.info(f"🎵 Processando áudio de {phone} - URL: {audio_url[:50]}...")
 
             # Baixa o arquivo de áudio para um arquivo temporário
+            temp_audio_path = None
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
-                    logger.info(f"Baixando áudio de {audio_url} para {temp_audio.name}")
+                    logger.info(f"📥 Baixando áudio de {audio_url} para {temp_audio.name}")
                     resp = requests.get(audio_url, stream=True, timeout=20)
                     resp.raise_for_status()
+                    
+                    # Verifica tamanho do arquivo (máximo 25MB)
+                    content_length = resp.headers.get('content-length')
+                    if content_length and int(content_length) > 25 * 1024 * 1024:
+                        logger.warning(f"Arquivo muito grande: {content_length} bytes")
+                        self._enviar_mensagens_com_delay(phone, ["O áudio é muito grande. Tente um arquivo menor."])
+                        return
+                    
                     for chunk in resp.iter_content(chunk_size=8192):
                         temp_audio.write(chunk)
                     temp_audio_path = temp_audio.name
+                    
+                logger.info(f"✅ Áudio baixado com sucesso: {temp_audio_path}")
+                
             except Exception as e:
-                logger.error(f"Erro ao baixar áudio: {e}")
+                logger.error(f"❌ Erro ao baixar áudio: {e}")
                 self._enviar_mensagens_com_delay(phone, ["Não consegui baixar o áudio. Pode tentar novamente?"])
                 return
 
             # Transcreve o áudio localmente
             try:
+                logger.info(f"🎯 Iniciando transcrição do arquivo: {temp_audio_path}")
                 texto_transcrito = self.whisper_service.transcribe_audio(temp_audio_path)
+                logger.info(f"📝 Transcrição concluída: '{texto_transcrito[:100]}...'")
+                
             except Exception as e:
-                logger.error(f"Erro ao transcrever áudio: {e}")
+                logger.error(f"❌ Erro ao transcrever áudio: {e}")
                 self._enviar_mensagens_com_delay(phone, ["Não consegui transcrever o áudio. Pode tentar novamente?"])
-                os.remove(temp_audio_path)
+                if temp_audio_path and os.path.exists(temp_audio_path):
+                    os.remove(temp_audio_path)
                 return
 
             # Remove arquivo temporário
             try:
-                os.remove(temp_audio_path)
+                if temp_audio_path and os.path.exists(temp_audio_path):
+                    os.remove(temp_audio_path)
+                    logger.info(f"🗑️ Arquivo temporário removido: {temp_audio_path}")
             except Exception as e:
                 logger.warning(f"Não foi possível remover arquivo temporário: {e}")
 
-            if texto_transcrito:
+            # Processa o texto transcrito
+            if texto_transcrito and texto_transcrito.strip():
+                logger.info(f"🤖 Enviando texto transcrito para IA: '{texto_transcrito[:50]}...'")
                 texto_data = {
                     'phone': phone,
                     'message': {'text': texto_transcrito}
                 }
                 self.processar_mensagem_texto(texto_data)
             else:
+                logger.warning("Texto transcrito vazio ou None")
                 mensagem_erro = ["Desculpe, não consegui entender o áudio. Pode escrever sua mensagem?"]
                 self._enviar_mensagens_com_delay(phone, mensagem_erro)
+                
         except Exception as e:
-            logger.error(f"Erro ao processar mensagem de áudio: {e}")
+            logger.error(f"❌ Erro geral ao processar mensagem de áudio: {e}")
+            try:
+                if 'temp_audio_path' in locals() and temp_audio_path and os.path.exists(temp_audio_path):
+                    os.remove(temp_audio_path)
+            except:
+                pass
     
     def atualizar_prompt(self, novo_prompt):
         """Atualiza o prompt da IA"""
