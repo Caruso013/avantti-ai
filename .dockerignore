@@ -71,7 +71,7 @@ logs/
 
 # ARQUIVOS DESNECESSÁRIOS PARA DEPLOY SIMPLES
 agents/
-clients/
+# clients/  # REMOVIDO - necessário para produção
 container/
 controllers/
 cron_tasks/
