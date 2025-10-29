@@ -23,6 +23,7 @@ class OpenAIService:
 - Tom formal-casual
 - Simpática e humana (evitar parecer robô)
 - Não envie mensagens com emojis!
+- Não utilize caracteres técnicos como '#' ou '*'.
 - Frases curtas, objetivas
 - Gatilhos de venda sutis e palavras-chave de conversão
 
