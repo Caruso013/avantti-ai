@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 import logging
 
 # Versão da aplicação
-AVANTTI_VERSION = "4.0.1"
-AVANTTI_CODENAME = "Clean Interface & 10s Response"
+AVANTTI_VERSION = "FINAL"
+AVANTTI_CODENAME = "AVANTTI AI - ELIANE VERSÃO FINAL!"
 
 # Adiciona o diretório atual ao PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -39,12 +39,25 @@ if not config_manager.validate_config():
     logger.error("Configuracoes invalidas. Verifique as variaveis de ambiente.")
     exit(1)
 
-print("=== AVANTTI AI - ELIANE V4 MODULAR ===")
+print("============================================================")
+print("🚀 AVANTTI AI - ELIANE VERSÃO FINAL! 🚀")
+print("============================================================")
+print("🤖 Sistema de buffer ativo - Debounce: 5 segundos")
+print("⏰ Timer contínuo: ✅ Ativo (cancelável)")
+print("📦 Consolidação de mensagens: ✅ Ativo")
+print("📞 Function calling: ✅ Ativo")
+print("🎯 Registro automático de leads: ✅ Ativo")
+print("============================================================")
+print("🤖 Sistema de buffer ativo - Debounce: 5 segundos")
+print("📞 Function calling: ✅ Ativo")  
+print("🎯 Registro automático de leads: ✅ Ativo")
+print("============================================================")
 
-# Sistema de filas melhorado
+# Sistema de filas melhorado com debounce contínuo
 message_queues = {}
 processing_lock = threading.Lock()
 active_processors = set()
+debounce_timers = {}  # Timers para debounce por telefone
 
 # Handler principal
 message_handler = MessageHandler()
@@ -64,77 +77,132 @@ def get_queue_for_phone(phone):
     return message_queues[phone]
 
 def process_message_queue(phone):
-    """Processa fila de mensagens usando o novo handler"""
+    """Processa fila de mensagens consolidadas (já após debounce)"""
     queue = get_queue_for_phone(phone)
     
-    logger.info(f"Iniciando processamento para {phone} - {queue.qsize()} mensagens")
+    logger.info(f"🔄 Processando fila para {phone} - {queue.qsize()} mensagens acumuladas")
     
+    # Coleta todas as mensagens da fila (sem esperar - já foi feito o debounce)
+    messages_to_process = []
     while not queue.empty():
         try:
-            message_data = queue.get(timeout=5)
-            message_text = message_data.get('message', '')
-            message_type = message_data.get('type', 'text')
-            
-            logger.info(f"Processando {message_type}: '{message_text[:50]}...' de {phone}")
-            
-            if message_text:
-                metrics['messages_processed'] += 1
-                
-                # Cria dados para o handler
-                if message_type == 'audio':
-                    metrics['audio_transcriptions'] += 1
-                    # Para áudio, usa handler específico
-                    handler_data = {
-                        'phone': phone,
-                        'message': {'audioUrl': message_text}  # URL do áudio
-                    }
-                    message_handler.processar_mensagem_audio(handler_data)
-                else:
-                    # Para texto, imagem, vídeo
-                    handler_data = {
-                        'phone': phone,
-                        'message': {'text': message_text}
-                    }
-                    message_handler.processar_mensagem_texto(handler_data)
-            
+            message_data = queue.get(timeout=0.1)
+            messages_to_process.append(message_data)
             queue.task_done()
-            time.sleep(1)  # Evita spam
+        except:
+            break
+    
+    if not messages_to_process:
+        logger.info(f"❌ Nenhuma mensagem para processar para {phone}")
+        return
+    
+    # 🔍 VERIFICA SE HÁ MENSAGENS DE ÁUDIO
+    audio_messages = [msg for msg in messages_to_process if msg.get('type') == 'audio']
+    
+    if audio_messages:
+        # 🎵 PRIORIZA ÁUDIO - processa apenas a primeira mensagem de áudio
+        logger.info(f"🎵 Detectado {len(audio_messages)} mensagem(ns) de áudio - processando áudio")
+        audio_data = audio_messages[0]  # Processa apenas a primeira
+        
+        try:
+            metrics['audio_transcriptions'] += 1
+            
+            # Cria dados para o handler de áudio
+            handler_data = {
+                'phone': phone,
+                'message': {
+                    'audioUrl': audio_data.get('message', '')
+                }
+            }
+            message_handler.processar_mensagem_audio(handler_data)
+            
+            logger.info(f"✅ Áudio processado com sucesso para {phone}")
             
         except Exception as e:
-            logger.error(f"Erro no processamento: {e}")
+            logger.error(f"❌ Erro no processamento de áudio: {e}")
             metrics['errors'] += 1
-            try:
-                queue.task_done()
-            except:
-                pass
+        
+        logger.info(f"🏁 Processamento de áudio concluído para {phone}")
+        return
     
-    logger.info(f"Processamento concluído para {phone}")
+    # 🎯 CONSOLIDA MENSAGENS DE TEXTO/IMAGEM/VIDEO
+    logger.info(f"📝 Consolidando {len(messages_to_process)} mensagens em uma resposta única")
+    
+    # Extrai texto de todas as mensagens
+    consolidated_messages = []
+    for i, msg in enumerate(messages_to_process):
+        text = msg.get('message', '')
+        if text and text.strip():
+            consolidated_messages.append(text.strip())
+            logger.debug(f"  Msg [{i+1}]: '{text[:50]}...'")
+    
+    # Junta todas as mensagens com separador
+    consolidated_text = " | ".join(consolidated_messages)
+    
+    logger.info(f"🎯 Mensagem consolidada: '{consolidated_text[:100]}...'")
+    logger.info(f"📦 Total de {len(consolidated_messages)} mensagens consolidadas")
+    
+    try:
+        # Usa a mensagem consolidada
+        message_text = consolidated_text
+        message_type = 'text'  # Sempre texto consolidado
+        
+        logger.info(f"🔥 Processando mensagem consolidada: '{message_text[:50]}...' de {phone}")
+        
+        if message_text:
+            metrics['messages_processed'] += 1
+            
+            # Cria dados para o handler
+            handler_data = {
+                'phone': phone,
+                'message': {'text': message_text}
+            }
+            message_handler.processar_mensagem_texto(handler_data)
+        
+        logger.info(f"✅ Mensagem consolidada processada com sucesso para {phone}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no processamento da mensagem consolidada: {e}")
+        metrics['errors'] += 1
+    
+    logger.info(f"🏁 Processamento concluído para {phone}")
 
 def start_queue_processor(phone):
-    """Inicia processador da fila com melhor controle"""
-    global active_processors
+    """Inicia processador da fila com debounce contínuo"""
+    global active_processors, debounce_timers
     
     with processing_lock:
-        if phone in active_processors:
-            logger.info(f"Processador já ativo para {phone}")
-            return
+        # Se já existe um timer, cancela o anterior
+        if phone in debounce_timers:
+            debounce_timers[phone].cancel()
+            logger.info(f"🔄 Timer anterior cancelado para {phone} - nova mensagem recebida")
         
-        active_processors.add(phone)
-        logger.info(f"Iniciando processador para {phone}")
-    
-    def worker():
-        try:
-            process_message_queue(phone)
-        except Exception as e:
-            logger.error(f"Erro no worker: {e}")
-        finally:
-            with processing_lock:
-                active_processors.discard(phone)
-                logger.info(f"Processador finalizado para {phone}")
-    
-    thread = threading.Thread(target=worker, name=f"queue-{phone}")
-    thread.daemon = True
-    thread.start()
+        # Se já tem processador ativo, apenas redefine o timer
+        if phone in active_processors:
+            logger.info(f"⏱️ Processador ativo para {phone} - redefinindo timer de 5s")
+        else:
+            logger.info(f"🚀 Iniciando novo processador para {phone}")
+            active_processors.add(phone)
+        
+        # Cria novo timer de 5 segundos
+        timer = threading.Timer(5.0, lambda: _execute_processor(phone))
+        debounce_timers[phone] = timer
+        timer.start()
+        
+        logger.info(f"⏰ Timer de 5s iniciado para {phone}")
+
+def _execute_processor(phone):
+    """Executa o processamento após o debounce"""
+    try:
+        logger.info(f"🎯 Executando processamento para {phone} após debounce")
+        process_message_queue(phone)
+    except Exception as e:
+        logger.error(f"Erro no processamento: {e}")
+    finally:
+        with processing_lock:
+            active_processors.discard(phone)
+            debounce_timers.pop(phone, None)
+            logger.info(f"🏁 Processador finalizado para {phone}")
 
 def extract_message_content(payload):
     """Extrai conteúdo da mensagem dependendo do tipo"""
@@ -142,26 +210,36 @@ def extract_message_content(payload):
         if not isinstance(payload, dict):
             return None, 'invalid'
         
+        # Verifica se é mensagem de áudio (múltiplas possibilidades)
+        if payload.get('audio') or payload.get('message', {}).get('audio'):
+            audio_obj = payload.get('audio') or payload.get('message', {}).get('audio', {})
+            if isinstance(audio_obj, dict):
+                audio_url = audio_obj.get('audioUrl') or audio_obj.get('url')
+                if audio_url and audio_url.startswith(('http://', 'https://')):
+                    logger.info(f"🎵 Áudio detectado: {audio_url[:50]}...")
+                    return audio_url, 'audio'
+        
+        # Verifica se a mensagem contém uma URL que parece ser de áudio
+        message_obj = payload.get('message', {})
+        if isinstance(message_obj, dict):
+            conversation = message_obj.get('conversation', '').strip()
+            if conversation and conversation.startswith(('http://', 'https://')) and ('audio' in conversation.lower() or 'temp-file' in conversation.lower()):
+                logger.info(f"🎵 Áudio detectado via URL na conversa: {conversation[:50]}...")
+                return conversation, 'audio'
+        
         # Mensagem de texto
-        if payload.get('text'):
-            text_obj = payload.get('text', {})
+        if payload.get('text') or payload.get('message', {}).get('conversation'):
+            text_obj = payload.get('text') or payload.get('message', {}).get('conversation', '')
             if isinstance(text_obj, dict):
                 message = text_obj.get('message', '').strip()
                 if len(message) > 4000:
                     message = message[:4000] + "... [truncado]"
                 return message, 'text'
-            return str(text_obj)[:4000], 'text'
-        
-        # Mensagem de áudio
-        elif payload.get('audio'):
-            audio_obj = payload.get('audio', {})
-            if isinstance(audio_obj, dict):
-                audio_url = audio_obj.get('audioUrl') or audio_obj.get('url')
-                if audio_url and audio_url.startswith(('http://', 'https://')):
-                    # Retorna URL para ser processada pelo handler
-                    return audio_url, 'audio'
-                else:
-                    return "URL de áudio inválida", 'audio_error'
+            elif isinstance(text_obj, str):
+                message = text_obj.strip()
+                if len(message) > 4000:
+                    message = message[:4000] + "... [truncado]"
+                return message, 'text'
         
         # Mensagem de imagem com caption
         elif payload.get('image'):

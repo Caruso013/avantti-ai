@@ -71,18 +71,18 @@ logs/
 
 # ARQUIVOS DESNECESSÁRIOS PARA DEPLOY SIMPLES
 agents/
-clients/
+# clients/  # REMOVIDO - necessário para produção
 container/
 controllers/
 cron_tasks/
 database/
 enums/
 exceptions/
-interfaces/
+# interfaces/  # REMOVIDO - necessário para produção (interfaces)
 repositories/
 services/
 tools/
-utils/
+# utils/  # REMOVIDO - necessário para produção (logger)
 workers/
 validate_config.py
 start_server.py

@@ -1,9 +1,19 @@
 import os
+import sys
 import requests
 import logging
 import re
+import json
 from datetime import datetime
 from .response_processor_service import response_processor
+
+# Adicionar root do projeto ao sys.path para importar clients
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+# Importar Contact2SaleClient e LeadData
+from clients.contact2sale_client import Contact2SaleClient, LeadData
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +52,14 @@ REGRA FUNDAMENTAL: SEMPRE ANALISE O CONTEXTO ANTES DE RESPONDER
 
 ⚠️ RESTRIÇÃO CRÍTICA: NUNCA INVENTE INFORMAÇÕES!
 - Use APENAS as informações listadas na seção 4
-- Se não souber detalhes específicos, diga "Posso verificar isso para você"
+- Se não souber detalhes específicos, diga EXATAMENTE: "Vou verificar essa informação com nossa equipe e te retorno"
 - NÃO crie descrições detalhadas não listadas no prompt
 - NÃO invente características dos empreendimentos
+- NÃO invente valores, metragens, número de quartos, localização exata
+- NÃO invente datas de entrega, fase de construção, ou status do empreendimento
+- NÃO invente características de infraestrutura (piscina, academia, playground, etc)
+- NÃO invente detalhes de acabamento, planta, área útil, área total
+- SE O LEAD PERGUNTAR algo não listado: "Vou verificar essa informação com nossa equipe e te retorno"
 
 1. **Apresentação inicial** (apenas na PRIMEIRA mensagem OU após 12+ horas sem contato)
 - **Primeira mensagem:** "Olá, {{nome}}! Aqui é a Eliane, da Evex Imóveis. Vi que você se interessou pelo anúncio do {{empreendimento}}."  
@@ -138,16 +153,32 @@ Região Metropolitana de Curitiba e cidades vizinhas
 8. **Forma de pagamento** → [payment] (se ainda não souber)
    - "Você pensa em pagamento à vista ou financiamento?"
 
-**IMPORTANTE - NUNCA PROMETA "DEPOIS":**
-- ERRADO: "Vou verificar e te envio"
-- ERRADO: "Te mando as informações em breve"  
-- ERRADO: "Vou consultar e retorno"
-- CORRETO: "Na Reserva Garibaldi temos lotes a partir de R$ 180 mil"
-- CORRETO: "Nossos empreendimentos ficam em Curitiba e região metropolitana"
-- CORRETO: "Trabalhamos com entrada facilitada e financiamento bancário"
-- CORRETO: "O Moradas do Lago é um condomínio residencial"
-- CORRETO: "Em São José temos o Life Garden, Cortona e Siena disponíveis"
-- CORRETO: "Para investimento, recomendo o Ecolife em Fazenda Rio Grande"
+**IMPORTANTE - O QUE PODE E NÃO PODE FAZER:**
+
+✅ CORRETO (informações gerais da seção 4):
+- "Na Reserva Garibaldi temos lotes disponíveis"
+- "Nossos empreendimentos ficam em Curitiba e região metropolitana"
+- "Trabalhamos com entrada facilitada e financiamento bancário"
+- "O Moradas do Lago é um condomínio residencial"
+- "Em São José temos o Life Garden, Cortona e Siena disponíveis"
+- "Para investimento, temos o Ecolife em Fazenda Rio Grande"
+- "Aceitamos FGTS como entrada"
+- "A comissão é de 4% sobre o valor à vista"
+
+❌ PROIBIDO INVENTAR (informações NÃO listadas na seção 4):
+- NUNCA invente valores específicos (ex: "apartamento de R$ 350 mil")
+- NUNCA invente metragens (ex: "80m²", "terrenos de 250m²")
+- NUNCA invente quartos/suítes (ex: "3 quartos sendo 1 suíte")
+- NUNCA invente infraestrutura (ex: "tem piscina aquecida", "academia completa")
+- NUNCA invente localização exata (ex: "fica na Rua X", "próximo ao Shopping Y")
+- NUNCA invente prazo de entrega (ex: "entrega em dezembro de 2025")
+- NUNCA invente status da obra (ex: "já está 50% pronto")
+- NUNCA invente características de acabamento (ex: "porcelanato", "armários planejados")
+
+🔄 QUANDO NÃO SOUBER:
+- "Vou verificar essa informação com nossa equipe e te retorno"
+- "Para detalhes específicos de metragem/valor, posso conectar você com um consultor"
+- "Essa informação eu preciso confirmar, posso passar seu contato para nossa equipe?"
 
 **NUNCA INVENTE DETALHES:**
 - ERRADO: "O Jardim Veneza tem ótima estrutura"
@@ -180,12 +211,35 @@ Bot: "Perfeito! Para investimento recomendo o Ecolife em Fazenda Rio Grande ou a
 - Nunca usar o nome automático do WhatsApp.
 - Se não houver nome, usar abertura neutra.
 
-# 6. Critérios de Qualificação
+# 6. Critérios de Qualificação e REGISTRO AUTOMÁTICO
 Lead é qualificado se:
 - Demonstra interesse real no empreendimento, ou
 - Pede informações sobre condições de pagamento, ou
 - Responde positivamente às etapas 1, 3 e 4, ou
 - Fornece informações detalhadas sobre orçamento e timing.
+
+🎯 **IMPORTANTE - MENSAGENS CONSOLIDADAS**: 
+Se a mensagem contém múltiplas informações separadas por " | ", significa que o lead enviou várias mensagens seguidas. Analise TODAS as informações e responda de forma CONSOLIDADA, considerando TUDO que foi mencionado:
+
+Exemplo:
+Lead: "olá | meu nome é Pedro | tenho 45mil | quero casa para morar | tem alguma dica?"
+Resposta: "Olá Pedro! Vi que você tem R$ 45 mil para investir em uma casa para morar. Com esse valor, posso sugerir excelentes opções! Me conta, você tem preferência por alguma região específica?"
+
+🚨 NUNCA responda cada parte separadamente - SEMPRE consolide em UMA resposta completa.
+
+🎯 **ATENÇÃO FUNCTION CALLING**: Quando um lead fornecer NOME + demonstrar INTERESSE genuíno, CHAME AUTOMATICAMENTE a função `registrar_lead` com os dados coletados:
+- Nome completo do lead
+- Telefone (sempre disponível)
+- Email se fornecido
+- Tipo de interesse (investimento/residencial/comercial)
+- Orçamento mencionado
+- Localização de interesse
+
+🚨 EXEMPLOS PARA FUNCTION CALLING:
+- Lead: "Oi, sou Pedro, quero informações sobre investimento" → REGISTRAR LEAD
+- Lead: "Meu nome é Ana, estou procurando apartamento" → REGISTRAR LEAD  
+- Lead: "Me chamo João, tenho R$ 300k para investir" → REGISTRAR LEAD
+- Lead: "Sou Maria, quero saber sobre os empreendimentos" → REGISTRAR LEAD
 
 # 7. Restrições RIGOROSAS
 - ✅ Pode informar: APENAS o que está listado na seção 4 (lista de empreendimentos e informações comerciais básicas)
@@ -251,7 +305,35 @@ Se você quiser incluir dados estruturados, use o seguinte formato JSON interno:
 }
 
 IMPORTANTE: O cliente receberá APENAS o conteúdo do campo "reply". NUNCA envie o JSON completo.
-Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 180 caracteres cada)."""
+Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 180 caracteres cada).
+
+# 11. ⚠️ REGRA FINAL CRÍTICA - NÃO INVENTE NADA!
+
+🚨 ATENÇÃO MÁXIMA: Esta é a regra MAIS IMPORTANTE de todas!
+
+VOCÊ SÓ PODE FORNECER:
+1. Nomes dos empreendimentos listados na seção 4
+2. Cidades onde ficam (conforme listado)
+3. Tipo básico: "loteamento" ou "condomínio" (conforme listado)
+4. Informações comerciais gerais: comissão 4%, entrada facilitada, financiamento, FGTS
+
+VOCÊ NUNCA PODE INVENTAR:
+❌ Valores específicos (R$ 350 mil, R$ 180 mil, etc)
+❌ Metragens (80m², 250m², 120m², etc)
+❌ Quartos (2 quartos, 3 quartos, suítes, etc)
+❌ Infraestrutura (piscina, academia, salão de festas, playground, churrasqueira, etc)
+❌ Localização exata (endereço, rua, bairro específico, distância de pontos)
+❌ Prazo de entrega (data, mês, ano, tempo estimado)
+❌ Status da obra (% construído, fase, pronto para morar)
+❌ Acabamentos (porcelanato, armários, gesso, pintura, piso)
+❌ Características específicas de lotes/unidades
+
+SE O LEAD PERGUNTAR QUALQUER COISA NÃO LISTADA:
+✅ "Para detalhes específicos como valores e metragem, vou conectar você com um consultor da nossa equipe!"
+✅ "Essas informações eu preciso confirmar. Posso passar seu contato para nossa equipe te dar todos os detalhes?"
+✅ "Ótima pergunta! Vou verificar essas informações e nossa equipe retorna com os detalhes completos!"
+
+MANTENHA-SE NO SEU PAPEL: Você é SDR (pré-vendas), seu trabalho é QUALIFICAR o lead (coletar nome, interesse, orçamento, finalidade) e PASSAR PARA VENDEDORES. Não tente vender diretamente com detalhes técnicos."""
     
     def update_prompt(self, new_prompt):
         """Atualiza o prompt do sistema"""
@@ -320,78 +402,121 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
         logger.info(f"Texto quebrado em {len(mensagens)} mensagens")
         return mensagens
     
-    def _verificar_reapresentacao(self, context):
-        """Verifica se precisa se reapresentar após 12 horas desde última interação"""
+    def _verificar_reapresentacao(self, phone, supabase_service):
+        """Verifica se precisa se reapresentar após 12 horas desde última APRESENTAÇÃO (não última mensagem)"""
         try:
-            if not context or len(context) == 0:
-                return False
+            # Usa o SupabaseService para verificar quando foi a última apresentação
+            info_apresentacao = supabase_service.verificar_ultima_apresentacao(phone)
             
-            # Pega a última mensagem do contexto
-            ultima_mensagem = context[-1]
+            if info_apresentacao:
+                precisa = info_apresentacao.get('precisa_reapresentar', False)
+                
+                if precisa:
+                    if info_apresentacao.get('teve_apresentacao'):
+                        logger.info(f"🔄 Reapresentação necessária para {phone} (última há {info_apresentacao.get('horas_desde', 0):.1f}h)")
+                    else:
+                        logger.info(f"✨ Primeira apresentação para {phone}")
+                else:
+                    logger.info(f"✅ Não precisa reapresentar para {phone} (última há {info_apresentacao.get('horas_desde', 0):.1f}h)")
+                
+                return precisa
             
-            # Verifica se tem timestamp
-            if 'timestamp' not in ultima_mensagem:
-                return False
-            
-            # Calcula diferença de tempo
-            from datetime import datetime, timedelta
-            
-            # Parse do timestamp da última mensagem
-            ultimo_timestamp = datetime.fromisoformat(ultima_mensagem['timestamp'].replace('Z', '+00:00'))
-            agora = datetime.now(ultimo_timestamp.tzinfo) if ultimo_timestamp.tzinfo else datetime.now()
-            
-            # Verifica se passou mais de 12 horas
-            diferenca = agora - ultimo_timestamp
-            passou_12_horas = diferenca > timedelta(hours=12)
-            
-            if passou_12_horas:
-                logger.info(f"Passou {diferenca.total_seconds()/3600:.1f} horas desde última interação - reapresentação necessária")
-            
-            return passou_12_horas
+            # Fallback: se não conseguiu verificar, não se apresenta
+            logger.warning(f"⚠️ Não foi possível verificar apresentação para {phone} - não se apresentará")
+            return False
             
         except Exception as e:
-            logger.error(f"Erro ao verificar necessidade de reapresentação: {e}")
+            logger.error(f"❌ Erro ao verificar necessidade de reapresentação: {e}")
             return False
     
-    def gerar_resposta(self, message, phone, context=None, lead_data=None):
+    def gerar_resposta(self, message, phone, context=None, lead_data=None, supabase_service=None):
         """Gera resposta da IA usando GPT-4o-mini configurado para o assistant asst_C4tLHrq74kxj8NUHEUkieU65"""
         try:
-            # Verifica se é a primeira interação (sem contexto ou contexto vazio)
-            is_primeira_mensagem = not context or len(context) == 0
-            
-            # Verifica se precisa se reapresentar após 12 horas
-            precisa_reapresentar = self._verificar_reapresentacao(context)
+            # Verifica se precisa se reapresentar usando o SupabaseService
+            if supabase_service:
+                precisa_reapresentar = self._verificar_reapresentacao(phone, supabase_service)
+            else:
+                # Fallback: se não tem supabase_service, usa lógica antiga
+                logger.warning("⚠️ SupabaseService não fornecido - usando lógica de apresentação simplificada")
+                precisa_reapresentar = not context or len(context) == 0
             
             # Aplica variáveis dinâmicas no prompt
             prompt_personalizado = self._aplicar_variaveis_prompt(self.system_prompt, lead_data)
             
-            # Se é a primeira mensagem OU precisa se reapresentar, reforça a instrução de apresentação
-            if is_primeira_mensagem or precisa_reapresentar:
-                if precisa_reapresentar:
-                    prompt_personalizado += "\n\nIMPORTANTE: Já passou mais de 12 horas desde a última interação com este lead. OBRIGATORIAMENTE se reapresente como Eliane da Evex Imóveis de forma calorosa, como se fosse um novo contato.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
-                else:
-                    prompt_personalizado += "\n\nIMPORTANTE: Esta é a PRIMEIRA mensagem para este lead. OBRIGATORIAMENTE se apresente como Eliane da Evex Imóveis conforme as instruções de apresentação inicial.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
+            # Adiciona instrução de apresentação APENAS se necessário
+            if precisa_reapresentar:
+                logger.info(f"🎤 Adicionando instrução de apresentação para {phone}")
+                prompt_personalizado += "\n\n🎤 APRESENTAÇÃO OBRIGATÓRIA: Se apresente como Eliane da Evex Imóveis conforme as instruções de apresentação inicial. Esta é a primeira mensagem ou já passou 12+ horas desde a última apresentação.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
             else:
-                prompt_personalizado += "\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
+                logger.info(f"💬 Continuando conversa para {phone} (sem apresentação)")
+                prompt_personalizado += "\n\n💬 CONTINUAÇÃO: NÃO se apresente novamente. Continue a conversa de forma natural e contextual, baseando-se no histórico.\n\nATENÇÃO CRÍTICA: Use APENAS as informações exatas da seção 4. NUNCA invente detalhes sobre empreendimentos. Se não souber algo específico, seja CONSULTIVA: desperte interesse, faça perguntas sobre finalidade e orçamento."
 
             # Payload para usar a API de chat completions com GPT-4o-mini
             messages = [
-                {"role": "system", "content": prompt_personalizado},
-                {"role": "user", "content": message}
+                {"role": "system", "content": prompt_personalizado}
             ]
             
-            # Se houver contexto, adiciona mensagens anteriores
+            # Se houver contexto, adiciona mensagens anteriores NA ORDEM CRONOLÓGICA
             if context:
-                # Adiciona contexto antes da mensagem atual
-                for ctx in context[-5:]:  # Últimas 5 mensagens
+                logger.info(f"🔄 Adicionando contexto: {len(context)} mensagens anteriores")
+                # Adiciona TODAS as mensagens do contexto em ordem cronológica
+                for ctx in context[-10:]:  # Últimas 10 mensagens para mais contexto
                     role = "user" if ctx.get('sender') == 'user' else "assistant"
-                    messages.insert(-1, {"role": role, "content": ctx.get('message', '')})
-
+                    msg_content = ctx.get('message', '').strip()
+                    if msg_content:  # Só adiciona se tiver conteúdo
+                        messages.append({"role": role, "content": msg_content})
+                        logger.debug(f"Contexto adicionado: {role} - {msg_content[:50]}...")
+            
+            # AGORA adiciona a mensagem atual por último
+            messages.append({"role": "user", "content": message})
+            
+            logger.info(f"📝 Total de mensagens enviadas para IA: {len(messages)} (incluindo system prompt)")
+            
             data = {
                 "model": "gpt-4o-mini",  # Modelo configurado para o assistant
                 "messages": messages,
                 "max_tokens": 300,  # Aumentado para acomodar JSON
-                "temperature": 0.7
+                "temperature": 0.7,
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "registrar_lead",
+                            "description": "Registra automaticamente um lead qualificado no Contact2Sale CRM quando coleta nome, telefone e demonstra interesse em investir em imóveis",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "nome": {
+                                        "type": "string",
+                                        "description": "Nome completo do lead"
+                                    },
+                                    "telefone": {
+                                        "type": "string", 
+                                        "description": "Telefone do lead (sempre disponível no contexto)"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "description": "Email do lead se fornecido"
+                                    },
+                                    "interesse": {
+                                        "type": "string",
+                                        "description": "Tipo de interesse: investimento, residencial, comercial"
+                                    },
+                                    "orcamento": {
+                                        "type": "string",
+                                        "description": "Faixa de orçamento mencionada pelo lead"
+                                    },
+                                    "localizacao": {
+                                        "type": "string",
+                                        "description": "Localização de interesse mencionada"
+                                    }
+                                },
+                                "required": ["nome", "telefone"]
+                            }
+                        }
+                    }
+                ],
+                "tool_choice": "auto"
             }
 
             response = requests.post(
@@ -403,13 +528,46 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
 
             if response.status_code == 200:
                 result = response.json()
-                texto_resposta = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                choice = result.get('choices', [{}])[0]
+                message = choice.get('message', {})
+                
+                # 🎯 VERIFICAR SE HOUVE FUNCTION CALL
+                tool_calls = message.get('tool_calls')
+                lead_registrado = False
+                if tool_calls:
+                    logger.info("🎯 Function call detectado - Processando registro de lead...")
+                    for tool_call in tool_calls:
+                        if tool_call.get('function', {}).get('name') == 'registrar_lead':
+                            try:
+                                # Extrair argumentos da function call
+                                arguments = json.loads(tool_call.get('function', {}).get('arguments', '{}'))
+                                arguments['telefone'] = phone  # Garantir que o telefone está correto
+                                
+                                # Registrar lead no Contact2Sale
+                                success = self._registrar_lead_contact2sale(arguments)
+                                if success:
+                                    logger.info(f"✅ Lead registrado com sucesso: {arguments.get('nome', 'Sem nome')}")
+                                    lead_registrado = True
+                                else:
+                                    logger.error(f"❌ Falha ao registrar lead: {arguments.get('nome', 'Sem nome')}")
+                            except Exception as e:
+                                logger.error(f"Erro ao processar function call: {e}")
+                
+                # Se registrou lead mas não tem texto de resposta, usa mensagem padrão
+                texto_resposta = message.get('content')
+                if texto_resposta:
+                    texto_resposta = texto_resposta.strip()
+                elif lead_registrado:
+                    # Mensagem de sucesso quando lead foi registrado
+                    texto_resposta = "Perfeito, vou notificar o time de vendas, logo entrarão em contato!"
+                    logger.info("🎯 Lead registrado - usando mensagem de sucesso")
+                else:
+                    texto_resposta = ""
                 
                 if texto_resposta:
                     # 🔥 NOVO: PROCESSAMENTO COM RESPONSE PROCESSOR
                     logger.info("Processando resposta com Response Processor...")
                     contexto_processamento = {
-                        'is_primeira_mensagem': is_primeira_mensagem,
                         'precisa_reapresentar': precisa_reapresentar,
                         'phone': phone,
                         'lead_data': lead_data
@@ -435,6 +593,70 @@ Sempre responda de forma natural, empática e mantenha mensagens curtas (máx 18
     def get_processor_stats(self):
         """Retorna estatísticas do Response Processor"""
         return response_processor.get_stats()
+    
+    def _registrar_lead_contact2sale(self, lead_data):
+        """
+        Registra lead no Contact2Sale CRM usando function calling
+        """
+        try:
+            # Obter credenciais do Contact2Sale
+            jwt_token = os.getenv('C2S_JWT_TOKEN')
+            company_id = os.getenv('C2S_COMPANY_ID_EVEX')
+            seller_id = os.getenv('C2S_SELLER_ID')
+            
+            if not jwt_token:
+                logger.error("❌ C2S_JWT_TOKEN não configurado")
+                return False
+            
+            # Instanciar client com credenciais
+            c2s_client = Contact2SaleClient(
+                jwt_token=jwt_token,
+                company_id=company_id,
+                seller_id=seller_id
+            )
+            
+            # Preparar dados usando a classe LeadData
+            nome = lead_data.get('nome', '')
+            telefone = lead_data.get('telefone', '')
+            email = lead_data.get('email', '')
+            interesse = lead_data.get('interesse', 'Investimento Imobiliário')
+            
+            # Criar body com informações completas
+            body = f"Lead qualificado via IA - Eliane (WhatsApp Bot)\n\n"
+            body += f"Interesse: {interesse}\n"
+            if lead_data.get('orcamento'):
+                body += f"Orçamento: {lead_data.get('orcamento')}\n"
+            if lead_data.get('localizacao'):
+                body += f"Localização: {lead_data.get('localizacao')}\n"
+            body += f"\nQualificado automaticamente em: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            
+            # Criar objeto LeadData
+            lead = LeadData(
+                name=nome,
+                phone=telefone,
+                email=email if email else None,
+                body=body,
+                source="WhatsApp Bot - Avantti AI",
+                description=f"Lead qualificado por IA - Interesse: {interesse}"
+            )
+            
+            # Enviar para Contact2Sale
+            logger.info(f"📤 Enviando lead para Contact2Sale: {nome} - {telefone}")
+            resultado = c2s_client.create_lead(lead)
+            
+            if resultado.success:
+                logger.info(f"✅ Lead registrado no Contact2Sale: {nome} - {telefone}")
+                logger.info(f"   Resposta: {resultado.data}")
+                return True
+            else:
+                logger.error(f"❌ Falha ao registrar lead no Contact2Sale")
+                logger.error(f"   Erro: {resultado.error}")
+                logger.error(f"   Status: {resultado.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro ao registrar lead no Contact2Sale: {e}")
+            return False
     
     def reset_processor_stats(self):
         """Reseta estatísticas do Response Processor"""

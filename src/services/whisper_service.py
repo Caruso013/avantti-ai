@@ -29,46 +29,28 @@ class WhisperService:
         self.max_size = int(os.getenv('OPENAI_MAX_AUDIO_TRANSCRIBE_MB', 25)) * 1024 * 1024
     
     @log_performance
-    def transcribe_audio(self, audio_url):
+    def transcribe_audio(self, audio_path):
         """Transcreve áudio usando OpenAI Whisper"""
         try:
-            logger.info(f"Iniciando transcrição de áudio: {audio_url[:50]}...")
+            logger.info(f"Iniciando transcrição de áudio: {audio_path}")
             
-            # Validação de URL
-            if not audio_url or not audio_url.startswith(('http://', 'https://')):
-                logger.warning("URL de áudio inválida")
+            # Verifica se o arquivo existe
+            if not os.path.exists(audio_path):
+                logger.error(f"Arquivo de áudio não encontrado: {audio_path}")
                 return None
             
-            # Baixa o áudio com validação de tamanho
-            response = requests.get(audio_url, timeout=30, stream=True)
-            if response.status_code != 200:
-                logger.error(f"Falha ao baixar áudio: {response.status_code}")
+            # Verifica tamanho do arquivo
+            file_size = os.path.getsize(audio_path)
+            if file_size > self.max_size:
+                logger.warning(f"Arquivo muito grande: {file_size} bytes")
                 return None
-            
-            # Verifica Content-Length
-            content_length = response.headers.get('content-length')
-            if content_length and int(content_length) > self.max_size:
-                logger.warning(f"Arquivo muito grande: {content_length} bytes")
-                return None
-            
-            # Salva temporariamente com validação
-            audio_data = b""
-            for chunk in response.iter_content(chunk_size=8192):
-                audio_data += chunk
-                if len(audio_data) > self.max_size:
-                    logger.warning(f"Arquivo excede limite de {self.max_size} bytes")
-                    return None
-            
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as temp_file:
-                temp_file.write(audio_data)
-                temp_file_path = temp_file.name
             
             # Transcreve com Whisper
             headers = {
                 'Authorization': f'Bearer {self.api_key}'
             }
             
-            with open(temp_file_path, 'rb') as audio_file:
+            with open(audio_path, 'rb') as audio_file:
                 files = {
                     'file': audio_file,
                     'model': (None, 'whisper-1'),
@@ -82,16 +64,13 @@ class WhisperService:
                     timeout=30
                 )
             
-            # Remove arquivo temporário
-            os.unlink(temp_file_path)
-            
             if response.status_code == 200:
                 result = response.json()
                 text = result.get('text', '').strip()
                 logger.info(f"Áudio transcrito com sucesso: {len(text)} caracteres")
                 return text
             else:
-                logger.error(f"Erro Whisper: {response.status_code}")
+                logger.error(f"Erro Whisper: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
